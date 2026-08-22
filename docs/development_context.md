@@ -135,12 +135,15 @@ Implementado antes da Fase 2, a pedido do usuário:
 - `src/ai/llm.factory.ts`: `createLLMProvider()` seleciona provider via env `LLM_PROVIDER=groq|ollama` (ollama ainda não implementado — Fase 3 completa virá depois)
 - Env novas: `LLM_PROVIDER` (default groq), `GROQ_API_KEY`, `GROQ_MODEL`
 - Testes: `tests/unit/groq.provider.test.ts` (fetch mockado: ACTION/CHAT, markdown, intent inválida, erro HTTP/rede); perf local em `tests/performance/llm.perf.test.ts` (p95 de overhead < 50ms em 100 chamadas mockadas; schema > 1000 ops/s)
-- **Performance real**: script `pnpm perf:groq` (`scripts/perf-groq.ts`) — requer `GROQ_API_KEY` no `.env`; mede latência média/p50/max de 5 chamadas reais. Ainda NÃO executado contra a API real (sem chave configurada).
+- **Performance real (executada)**: `pnpm perf:groq` com `openai/gpt-oss-120b`, 5 chamadas: latência média **874ms**, p50 964ms, max 1172ms. Modos ACTION e CHAT classificados corretamente.
+- **Importante**: `llama-3.3-70b-versatile` foi **descontinuado pela Groq** (404). Default alterado para `openai/gpt-oss-120b` em env, `.env.example`, testes e script (2026-08-22).
+- Teste local de overhead (`tests/performance/llm.perf.test.ts`) passando: p95 < 50ms mockado; schema > 1000 ops/s.
 
 Verificação: typecheck, lint e 86 testes passando.
 
 ## 11. Pendências
 
-- [ ] Definir `GROQ_API_KEY` no `.env` e rodar `pnpm perf:groq` para baseline de latência real
+- [x] Baseline de latência real medido (874ms médio com gpt-oss-120b)
+- [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)
 - [ ] Adapter Ollama (Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória docs/13)
 - [ ] Iniciar Fase 2: integração WhatsApp (whatsapp-web.js) atrás de adapter

@@ -5,7 +5,7 @@ vi.stubGlobal('fetch', fetchMock);
 
 const { complete } = await import('../../src/ai/providers/groq.provider.js');
 
-const config = { apiKey: 'test-key', model: 'llama-3.3-70b-versatile' };
+const config = { apiKey: 'test-key', model: 'openai/gpt-oss-120b' };
 
 function groqReply(content: string) {
 	return {
@@ -48,7 +48,7 @@ describe('groq.provider', () => {
 		);
 		await complete(config, { messages: [{ role: 'user', content: 'teste' }] });
 		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-		expect(body.model).toBe('llama-3.3-70b-versatile');
+		expect(body.model).toBe('openai/gpt-oss-120b');
 		expect(body.messages[0].role).toBe('system');
 	});
 

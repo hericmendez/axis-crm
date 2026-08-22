@@ -6,7 +6,7 @@ if (!apiKey) {
 	process.exit(1);
 }
 
-const model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
+const model = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const RUNS = 5;
 
 const prompts = [

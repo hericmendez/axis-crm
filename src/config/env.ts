@@ -9,7 +9,7 @@ const envSchema = z.object({
 	API_KEY: z.string().min(1).optional(),
 	LLM_PROVIDER: z.enum(['ollama', 'groq']).default('groq'),
 	GROQ_API_KEY: z.string().min(1).optional(),
-	GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+	GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
 	OLLAMA_BASE_URL: z.string().optional(),
 	OLLAMA_MODEL: z.string().optional(),
 	WHATSAPP_SESSION_PATH: z.string().optional(),
