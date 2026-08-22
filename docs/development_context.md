@@ -126,7 +126,21 @@ Verificação: `tsc --noEmit`, ESLint e 78 testes passando.
 - [ ] Garantir criação explícita de índices em produção (hoje depende de `autoIndex`)
 - [ ] Rate limiter em memória — trocar por solução distribuída se houver múltiplas instâncias
 
-## 10. Pendências observadas nesta análise
+## 10. Sessão de 2026-08-22 (2) — adapter Groq/Llama 3.3 70B (início da Fase 3, antecipado)
 
-- [ ] Definir `OLLAMA_MODEL` no `.env`
+Implementado antes da Fase 2, a pedido do usuário:
+
+- `src/types/ai.ts`: `LLMProvider` (interface), `ChatMessage`, `CompletionRequest`, `INTENTS` (CRIAR_LEAD, ATUALIZAR_LEAD, CONSULTAR_AGENDA, REGISTRAR_EVENTO, CONVERSAR) e `structuredOutputSchema` (Zod: `mode ACTION|CHAT`, intent, confidence, parameters/response)
+- `src/ai/providers/groq.provider.ts`: adapter Groq (endpoint OpenAI-compatible `api.groq.com`), modelo default `llama-3.3-70b-versatile`, temperature 0.1, `response_format: json_object`, system prompt que exige JSON estruturado, timeout 30s, extração tolerante de JSON (markdown/fence), validação Zod da saída; erros → AppError 502 sem vazar corpo
+- `src/ai/llm.factory.ts`: `createLLMProvider()` seleciona provider via env `LLM_PROVIDER=groq|ollama` (ollama ainda não implementado — Fase 3 completa virá depois)
+- Env novas: `LLM_PROVIDER` (default groq), `GROQ_API_KEY`, `GROQ_MODEL`
+- Testes: `tests/unit/groq.provider.test.ts` (fetch mockado: ACTION/CHAT, markdown, intent inválida, erro HTTP/rede); perf local em `tests/performance/llm.perf.test.ts` (p95 de overhead < 50ms em 100 chamadas mockadas; schema > 1000 ops/s)
+- **Performance real**: script `pnpm perf:groq` (`scripts/perf-groq.ts`) — requer `GROQ_API_KEY` no `.env`; mede latência média/p50/max de 5 chamadas reais. Ainda NÃO executado contra a API real (sem chave configurada).
+
+Verificação: typecheck, lint e 86 testes passando.
+
+## 11. Pendências
+
+- [ ] Definir `GROQ_API_KEY` no `.env` e rodar `pnpm perf:groq` para baseline de latência real
+- [ ] Adapter Ollama (Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória docs/13)
 - [ ] Iniciar Fase 2: integração WhatsApp (whatsapp-web.js) atrás de adapter

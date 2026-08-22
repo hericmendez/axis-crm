@@ -11,7 +11,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint src tests",
 		"format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-		"test": "vitest run"
+		"test": "vitest run",
+		"perf:groq": "tsx --env-file=.env scripts/perf-groq.ts"
 	},
 	"engines": {
 		"node": ">=20"
