@@ -1,3 +1,7 @@
 allowBuilds:
   esbuild: true
-  mongodb-memory-server: set this to true or false
+  mongodb-memory-server: true
+  puppeteer: true
+onlyBuiltDependencies:
+  - mongodb-memory-server
+  - puppeteer

@@ -4,6 +4,7 @@ import { leadRouter } from './lead.routes.js';
 import { eventoRouter } from './evento.routes.js';
 import { agendaRouter } from './agenda.routes.js';
 import { metricasRouter } from './metricas.routes.js';
+import { whatsappRouter } from './whatsapp.routes.js';
 
 export const router = Router();
 
@@ -12,3 +13,4 @@ router.use(leadRouter);
 router.use(eventoRouter);
 router.use(agendaRouter);
 router.use(metricasRouter);
+router.use(whatsappRouter);

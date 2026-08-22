@@ -141,7 +141,28 @@ Implementado antes da Fase 2, a pedido do usuário:
 
 Verificação: typecheck, lint e 86 testes passando.
 
-## 11. Pendências
+## 12. Sessão de 2026-08-22 (3) — Fase 2: WhatsApp (etapa 1 concluída)
+
+Implementado:
+
+- Deps: `whatsapp-web.js` + `qrcode-terminal` (puppeteer aprovado em `pnpm-workspace.yaml`, `onlyBuiltDependencies`)
+- Env novas (`.env.example` atualizado): `WHATSAPP_ENABLED` (default false), `WHATSAPP_ALLOWED_GROUPS` (IDs separados por vírgula; vazio = todos os grupos), `AXIS_NUMBER` (número do próprio Axis para detectar menções)
+- `src/whatsapp/message-filter.ts`: **função pura e testável** com as regras dos docs/05 — ignora mensagens próprias (anti-loop), restringe grupos autorizados (configurável, nada hardcoded), exige menção ao Axis em grupo (`mentionedIds` contendo AXIS_NUMBER ou regex `/@axis\b/i` no texto); mensagens privadas não exigem menção
+- `src/whatsapp/whatsapp.service.ts`: estado (status/QR) + `handleIncomingMessage` que aplica o filtro e, hoje, apenas loga a mensagem aceita (TODO Fase 3: encaminhar ao ConversationService → AI Orchestrator)
+- `src/whatsapp/whatsapp.adapter.ts`: Client whatsapp-web.js com `LocalAuth` persistente (`WHATSAPP_SESSION_PATH`), eventos qr/loading/ready/disconnected, handler de `message_create`; `start()`/`stop()`
+- Rota `GET /api/whatsapp/status` → `{status, qr}` (status: desconectado|aguardando_qr|conectando|conectado)
+- `server.ts`: inicia adapter se `WHATSAPP_ENABLED=true`; encerra no graceful shutdown
+- Testes: `tests/unit/message-filter.test.ts` (7 casos: anti-loop, grupo não autorizado, sem menção, menção por número, menção textual @axis, falso positivo @axiss rejeitado via word boundary, DM sem menção)
+
+Verificação: typecheck, lint e **93 testes** passando.
+
+### Próximos passos da Fase 2
+- [ ] Autenticar sessão real (rodar com WHATSAPP_ENABLED=true e escanear QR)
+- [ ] Envio de respostas (método send no adapter atrás de interface)
+- [ ] Rate limit próprio p/ envio no WhatsApp (evitar banimento)
+- [ ] Encadear mensagens aceitas ao pipeline de IA (Fase 3)
+
+## 13. Pendências
 
 - [x] Baseline de latência real medido (874ms médio com gpt-oss-120b)
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)

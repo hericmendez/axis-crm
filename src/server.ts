@@ -2,6 +2,7 @@ import { getEnv } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { createApp } from './app.js';
 import { connectMongo, disconnectMongo } from './infra/mongo/mongo.connection.js';
+import * as whatsappAdapter from './whatsapp/whatsapp.adapter.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -14,6 +15,11 @@ function main(): void {
 			logger.info('Conectado ao MongoDB');
 			const server = app.listen(env.PORT, () => {
 				logger.info(`Servidor escutando na porta ${env.PORT}`);
+				if (env.WHATSAPP_ENABLED) {
+					whatsappAdapter.start().catch((err: unknown) => {
+						logger.error({ err }, 'Falha ao iniciar WhatsApp');
+					});
+				}
 			});
 
 			const shutdown = (signal: string) => {
@@ -24,11 +30,16 @@ function main(): void {
 				}, SHUTDOWN_TIMEOUT_MS);
 				timeout.unref();
 				server.close(() => {
-					disconnectMongo()
-						.catch((err: unknown) => {
-							logger.error({ err }, 'Falha ao desconectar MongoDB');
-						})
-						.finally(() => process.exit(0));
+					whatsappAdapter
+						.stop()
+						.catch((err: unknown) => logger.error({ err }, 'Falha ao encerrar WhatsApp'))
+						.finally(() =>
+							disconnectMongo()
+								.catch((err: unknown) => {
+									logger.error({ err }, 'Falha ao desconectar MongoDB');
+								})
+								.finally(() => process.exit(0)),
+						);
 				});
 			};
 
