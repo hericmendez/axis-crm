@@ -38,23 +38,28 @@ Routes → Controllers → Services → Repositories/Integrations
 
 ## 4. Estado atual da implementação
 
-Git: inicializado em `main`, **sem nenhum commit ainda** (todo o estado atual não está versionado).
+Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter Groq). Ver `git log --oneline`.
 
-### Concluído — Fases 0 e 1 do roadmap (~1.7k linhas em src+tests)
+### Concluído
+
+**Fases 0 e 1** (~1.7k linhas em src+tests):
 
 - `src/config/env.ts`: env carregada/validada num único módulo via Zod, cacheada (`getEnv`)
 - `src/app.ts` / `src/server.ts`: Express + pino-http, graceful shutdown (SIGINT/SIGTERM, timeout 10s), handlers de unhandledRejection/uncaughtException, conexão Mongo
 - **Domínio Lead completo**: model (telefone único), repository (CRUD, paginação, agregações), service com regras de negócio (normalização de telefone, duplicidade → 409, `dataConversao` só com status VENDIDO, auto-set na venda), controller fino com validação Zod, rotas `/api/leads`
-- **Eventos**: model/service/repository — criar evento aplica efeitos no lead (VENDA→VENDIDO, NO_SHOW→NO_SHOW etc., atualizando dataAgendamento/dataConversao); log de falha parcial
-- **Agenda**: `GET /api/agenda`; **Métricas**: `GET /api/metricas` (leadsPorStatus, eventosPorTipo, taxaConversao)
+- **Eventos**: model/service/repository — criar evento aplica efeitos no lead; ação compensatória se a atualização do lead falhar
+- **Agenda**: `GET /api/agenda`; **Métricas**: `GET /api/metricas`
 - Health check, error handler / not-found middlewares, `AppError`, utilitário de telefone
-- Testes: unitários (validators lead/evento, telefone), infra (env, error-middleware, health), integração com Mongo em memória (`tests/integration/setup.ts`): APIs de leads/eventos, regras do lead.service, agenda+métricas
+- **Hardening de segurança**: API key (`x-api-key`), helmet, rate limit HTTP (120 req/min/IP), limite de payload 100kb, limites nos validators Zod
+
+**Adapter Groq (início antecipado da Fase 3)**: `src/types/ai.ts` (`LLMProvider`, saída estruturada ACTION|CHAT validada por Zod), `src/ai/providers/groq.provider.ts`, `src/ai/llm.factory.ts`. Modelo default `openai/gpt-oss-120b`; latência real medida ~874ms.
+
+**Fase 2 — WhatsApp**: ver checkpoint detalhado na seção 12. Resumo: adapter whatsapp-web.js isolado, filtro de mensagens, boundary de saída (`WhatsAppClient`) e rate limiter concorrência-seguro prontos; autenticação real bloqueada por falta de número dedicado.
 
 ### Não existe ainda
 
-`src/ai/`, `src/integrations/`, `src/whatsapp/` — Fases 2–5 pendentes.
-
-Env já preparada antecipadamente no `.env` (não commitado): `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (vazio), `WHATSAPP_SESSION_PATH`, `GOOGLE_*`.
+- Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória conversacional
+- `src/integrations/` (Google Calendar/Sheets) — Fases 4–6 pendentes
 
 ## 5. Roadmap (docs/00-roadmap.md)
 
@@ -62,13 +67,14 @@ Env já preparada antecipadamente no `.env` (não commitado): `OLLAMA_BASE_URL`,
 |---|---|---|
 | 0 | Fundação (env, app, server, logs, health, testes) | ✅ |
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
-| 2 | WhatsApp (whatsapp-web.js): sessão persistente, QR Code/status, recebimento, grupos/menções ao Axis, proteção contra loops (responder só quando mencionado; ignorar mensagens próprias; ID de grupo configurável, não hardcoded) | ⬜ próximo passo |
-| 3 | IA: adapter Ollama via interface, classificação, saída estruturada, conversation memory (docs/13), tool calling, fallback | ⬜ |
+| 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
+| 2 | WhatsApp: adapter, filtro, boundary de saída prontos; **autenticação real bloqueada** (sem número dedicado — dependência externa) | 🔶 checkpoint |
+| 3 | IA: adapter Groq ✅ antecipado; faltam ConversationService, AI Orchestrator, router de intenção, tool calling, memória (docs/13), fallback Ollama | 🔶 parcial |
 | 4 | Integrações Google Calendar / Sheets como adapters isolados | ⬜ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximo passo imediato: iniciar Fase 2 (WhatsApp).**
+**Próximos passos imediatos:** (a) quando houver número dedicado → autenticação real do WhatsApp; ou (b) Fase 3 — encadear mensagens aceitas ao pipeline de IA (independente do WhatsApp).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
@@ -119,12 +125,6 @@ node generate-tree.js   # regenera axis-rewrite-docs_tree.txt
 8. ✅ Logger redact inclui header `x-api-key`
 
 Verificação: `tsc --noEmit`, ESLint e 78 testes passando.
-
-### Débito técnico restante (aceito/adiado)
-- [ ] Soft delete em `DELETE /api/leads` (eventos referenciam leads)
-- [ ] `updateById` usa `$set` — não permite desmarcar campos (`$unset`)
-- [ ] Garantir criação explícita de índices em produção (hoje depende de `autoIndex`)
-- [ ] Rate limiter em memória — trocar por solução distribuída se houver múltiplas instâncias
 
 ## 10. Sessão de 2026-08-22 (2) — adapter Groq/Llama 3.3 70B (início da Fase 3, antecipado)
 
@@ -200,9 +200,22 @@ Verificação: typecheck, lint e **100 testes** passando.
 - Definir/configurar identificação de grupos em produção
 - Conectar mensagens aceitas ao pipeline de IA (Fase 3)
 
-## 13. Pendências
+## 11. Pendências
 
-- [x] Baseline de latência real medido (874ms médio com gpt-oss-120b)
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)
-- [ ] Adapter Ollama (Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória docs/13)
-- [ ] Iniciar Fase 2: integração WhatsApp (whatsapp-web.js) atrás de adapter
+- [ ] Autenticação real do WhatsApp (bloqueada por falta de número dedicado — ver checkpoint na seção 12)
+- [ ] Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória conversacional (docs/13)
+- [ ] Adapter Ollama (fallback local)
+
+### Débito técnico da Fase 1 (aceito/adiado)
+
+- [ ] Soft delete em `DELETE /api/leads` (eventos referenciam leads)
+- [ ] `updateById` usa `$set` — não permite desmarcar campos (`$unset`)
+- [ ] Garantir criação explícita de índices em produção (hoje depende de `autoIndex`)
+- [ ] Rate limiters HTTP e de envio em memória — trocar por solução distribuída se houver múltiplas instâncias
+
+## Comandos adicionais
+
+```bash
+pnpm perf:groq    # teste de latência real contra a Groq (requer GROQ_API_KEY no .env)
+```
