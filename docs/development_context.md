@@ -158,9 +158,18 @@ Verificação: typecheck, lint e **93 testes** passando.
 
 ### Próximos passos da Fase 2
 - [ ] Autenticar sessão real (rodar com WHATSAPP_ENABLED=true e escanear QR)
-- [ ] Envio de respostas (método send no adapter atrás de interface)
-- [ ] Rate limit próprio p/ envio no WhatsApp (evitar banimento)
 - [ ] Encadear mensagens aceitas ao pipeline de IA (Fase 3)
+
+### Fase 2 etapa 2 — boundary de saída (concluída)
+
+- `src/types/whatsapp.ts`: interface `WhatsAppClient { sendText(chatId, text): Promise<void> }` — única forma de a aplicação enviar mensagens; nenhum módulo fora de `src/whatsapp/whatsapp.adapter.ts` importa whatsapp-web.js
+- `whatsapp.service.ts`: `setClient`/`clearClient` + `sendMessage(chatId, text)` que valida client registrado e status `conectado` (→ AppError 503), campos vazios (→ 400), rate limiter (→ 429) e converte falha do provider em AppError 502 sem vazar erro interno
+- `send-rate-limiter.ts`: limite em memória de ~3s entre envios (proteção anti-banimento, separado do rate limit HTTP)
+- `whatsapp.adapter.ts`: implementa `WhatsAppClient`; registra no evento `ready`, desregistra no `disconnected` e no `stop()`
+- Testes: `tests/unit/whatsapp-send.test.ts` (7 casos com mock da interface, sem whatsapp-web.js)
+- Arquitetura: server.ts → adapter → WhatsAppClient ← service; AI layer (Fase 3) dependerá apenas do service
+
+Verificação: typecheck, lint e **100 testes** passando.
 
 ## 13. Pendências
 

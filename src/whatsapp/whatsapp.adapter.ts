@@ -1,10 +1,20 @@
 import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
+import type { WhatsAppClient } from '../types/whatsapp.js';
 import * as whatsappService from './whatsapp.service.js';
 import { getEnv } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
 let client: Client | undefined;
+
+const whatsappClientAdapter: WhatsAppClient = {
+	async sendText(chatId: string, text: string): Promise<void> {
+		if (!client) {
+			throw new Error('WhatsApp client não inicializado');
+		}
+		await client.sendMessage(chatId, text);
+	},
+};
 
 export async function start(): Promise<void> {
 	const env = getEnv();
@@ -24,8 +34,10 @@ export async function start(): Promise<void> {
 	client.on('ready', () => {
 		whatsappService.setQr(undefined);
 		whatsappService.setStatus('conectado');
+		whatsappService.setClient(whatsappClientAdapter);
 	});
 	client.on('disconnected', (reason: string) => {
+		whatsappService.clearClient();
 		whatsappService.setStatus('desconectado');
 		logger.warn({ reason }, 'WhatsApp desconectado');
 	});
@@ -57,6 +69,7 @@ export async function stop(): Promise<void> {
 	if (client) {
 		await client.destroy();
 		client = undefined;
+		whatsappService.clearClient();
 		whatsappService.setStatus('desconectado');
 	}
 }
