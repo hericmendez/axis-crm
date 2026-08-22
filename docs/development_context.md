@@ -171,6 +171,13 @@ Verificação: typecheck, lint e **93 testes** passando.
 
 Verificação: typecheck, lint e **100 testes** passando.
 
+### Fase 2 micro-etapa — rate limiter de envio concorrência-seguro
+
+- **Race condition confirmada**: `canSendNow()` (leitura) e `markSent()` (escrita pós-await) eram operações separadas; duas chamadas concorrentes a `sendMessage` passavam ambas pela checagem antes de qualquer `markSent`, enviando duas mensagens em sequência imediata.
+- **Correção**: `send-rate-limiter.ts` agora expõe `tryAcquire()` atômico — reserva o slot no mesmo instante da checagem e retorna função de `release` que restaura o timestamp anterior. Sucesso mantém o bloqueio de ~3s; falha do provider chama `release()` e permite novo envio imediato.
+- Testes novos: 2 envios concorrentes via `Promise.allSettled` (apenas 1 chega ao client, outro recebe 429); falha do provider libera a reserva para envio imediato; teste de intervalo migrado para fake timers.
+- Verificação: typecheck, lint e **102 testes** passando.
+
 ## 13. Pendências
 
 - [x] Baseline de latência real medido (874ms médio com gpt-oss-120b)

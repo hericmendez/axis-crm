@@ -47,15 +47,16 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
 	if (!chatId.trim() || !text.trim()) {
 		throw new AppError(400, 'chatId e texto são obrigatórios');
 	}
-	if (!sendRateLimiter.canSendNow()) {
+	const release = sendRateLimiter.tryAcquire();
+	if (!release) {
 		throw new AppError(429, 'Envio bloqueado temporariamente pelo limitador de taxa');
 	}
 
 	try {
 		await client.sendText(chatId, text);
-		sendRateLimiter.markSent();
 		logger.info({ chatId }, 'Mensagem enviada');
 	} catch {
+		release();
 		logger.error({ chatId }, 'Falha ao enviar mensagem WhatsApp');
 		throw new AppError(502, 'Falha ao enviar mensagem via WhatsApp');
 	}

@@ -67,18 +67,67 @@ describe('whatsapp.service sendMessage', () => {
 	});
 
 	it('rate limit bloqueia segundo envio imediato e libera após intervalo', async () => {
-		const client = mockClient();
+		vi.useFakeTimers();
+		try {
+			const client = mockClient();
+			connect(client);
+
+			await whatsappService.sendMessage('chat@g.us', 'primeira');
+			await expect(whatsappService.sendMessage('chat@g.us', 'segunda')).rejects.toMatchObject({
+				statusCode: 429,
+			});
+
+			vi.setSystemTime(Date.now() + 3_001);
+			await expect(
+				whatsappService.sendMessage('chat@g.us', 'terceira'),
+			).resolves.toBeUndefined();
+			expect(client.sendText).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('dois envios concorrentes: apenas um alcança o client, o outro recebe 429', async () => {
+		let resolveSend: () => void = () => {};
+		const client = mockClient({
+			sendText: vi.fn().mockImplementation(
+				() =>
+					new Promise<void>((resolve) => {
+						resolveSend = resolve;
+					}),
+			),
+		});
 		connect(client);
 
-		await whatsappService.sendMessage('chat@g.us', 'primeira');
-		await expect(whatsappService.sendMessage('chat@g.us', 'segunda')).rejects.toMatchObject({
-			statusCode: 429,
-		});
+		const first = whatsappService.sendMessage('chat@g.us', 'a');
+		const second = whatsappService.sendMessage('chat@g.us', 'b');
+		resolveSend();
+		const results = await Promise.allSettled([first, second]);
 
-		sendRateLimiter.markSent(Date.now() - 10_000);
-		await expect(
-			whatsappService.sendMessage('chat@g.us', 'terceira'),
-		).resolves.toBeUndefined();
+		expect(results[0].status).toBe('fulfilled');
+		expect(results[1].status).toBe('rejected');
+		const rejection = (results[1] as PromiseRejectedResult).reason;
+		expect(rejection).toMatchObject({ statusCode: 429 });
+		expect(client.sendText).toHaveBeenCalledTimes(1);
+		resolveSend();
+	});
+
+	it('após falha do provider, a reserva é liberada e novo envio imediato funciona', async () => {
+		const client = mockClient({
+			sendText: vi
+				.fn()
+				.mockRejectedValueOnce(new Error('falha'))
+				.mockResolvedValueOnce(undefined),
+		});
+		connect(client);
+
+		const firstErr = await whatsappService.sendMessage('chat@g.us', 'a').then(
+			() => null,
+			(e) => e,
+		);
+		expect(firstErr).toMatchObject({ statusCode: 502 });
+
+		await expect(whatsappService.sendMessage('chat@g.us', 'b')).resolves.toBeUndefined();
 		expect(client.sendText).toHaveBeenCalledTimes(2);
 	});
 
