@@ -178,6 +178,28 @@ Verificação: typecheck, lint e **100 testes** passando.
 - Testes novos: 2 envios concorrentes via `Promise.allSettled` (apenas 1 chega ao client, outro recebe 429); falha do provider libera a reserva para envio imediato; teste de intervalo migrado para fake timers.
 - Verificação: typecheck, lint e **102 testes** passando.
 
+### CHECKPOINT Fase 2 (2026-08-22) — integração WhatsApp aguardando número dedicado
+
+**Concluído (código):**
+- Adapter de entrada whatsapp-web.js com sessão persistente (LocalAuth), QR, status e graceful shutdown
+- Filtro de mensagens puro/testável (anti-loop, grupos autorizados configuráveis, menções)
+- Boundary de saída: interface `WhatsAppClient` + `whatsapp.service.sendMessage()`
+- Rate limiter de envio concorrência-seguro (reserva atômica; falha libera slot)
+- Tratamento de erros do provider (502 sem vazamento interno)
+- 102 testes unitários/integração; whatsapp-web.js importado apenas pelo adapter (verificado por grep)
+
+**Bloqueado (dependência externa, NÃO é defeito de código):**
+- Autenticação real do WhatsApp: não há número/SIM dedicado disponível para o CRM. Desenvolvimento da integração para neste ponto até o número existir.
+
+**Adiado para a etapa de autenticação real:**
+- Obter/configurar o número dedicado do Axis
+- Autenticar a sessão (escanear QR com WHATSAPP_ENABLED=true)
+- Verificar persistência da sessão (restarts)
+- Adicionar o Axis ao grupo alvo
+- Verificar mensagens reais de entrada e saída
+- Definir/configurar identificação de grupos em produção
+- Conectar mensagens aceitas ao pipeline de IA (Fase 3)
+
 ## 13. Pendências
 
 - [x] Baseline de latência real medido (874ms médio com gpt-oss-120b)
