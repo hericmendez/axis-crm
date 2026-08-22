@@ -6,6 +6,7 @@ const envSchema = z.object({
 	PORT: z.coerce.number().int().positive().default(3000),
 	MONGO_URI: z.string().min(1, 'MONGO_URI é obrigatório'),
 	LOG_LEVEL: z.string().optional(),
+	API_KEY: z.string().min(1).optional(),
 	OLLAMA_BASE_URL: z.string().optional(),
 	OLLAMA_MODEL: z.string().optional(),
 	WHATSAPP_SESSION_PATH: z.string().optional(),

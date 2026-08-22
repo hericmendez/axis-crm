@@ -13,6 +13,12 @@ export async function create(data: CreateEventoInput): Promise<Evento> {
 	return toEventoDTO(doc.toObject());
 }
 
+export async function deleteById(id: string): Promise<boolean> {
+	if (!OBJECT_ID_RE.test(id)) return false;
+	const result = await EventoModel.findByIdAndDelete(id);
+	return result !== null;
+}
+
 export async function findByLeadId(leadId: string): Promise<Evento[]> {
 	if (!OBJECT_ID_RE.test(leadId)) return [];
 	const docs = await EventoModel.find({ leadId }).sort({ data: 1 }).lean();

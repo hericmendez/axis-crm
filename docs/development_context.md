@@ -100,8 +100,33 @@ pnpm test         # vitest run
 node generate-tree.js   # regenera axis-rewrite-docs_tree.txt
 ```
 
-## 9. Pendências observadas nesta análise
+## 9. Sessão de 2026-08-22 — revisão da Fase 1 e correções
 
-- [ ] Criar primeiro commit (git está sem histórico)
+### Avaliação: substituir Ollama por LLM em nuvem
+- Tecnicamente viável: arquitetura já isola via `interface LLMProvider`; recomendo manter **dois adapters** (ollama/cloud) selecionáveis via env (`LLM_PROVIDER`).
+- Modelo deste chat (`ox-alpha`) **não tem API pública conhecida** — não serve diretamente para o backend.
+- Riscos de nuvem: PII de leads saindo da máquina (conflito com docs/10 e LGPD), rate limit/cota em modelos free.
+- **Recomendação de modelo free**: **Groq** (Llama 3.3 70B, `llama-3.3-70b-versatile`) — free tier generoso, rápido, endpoint OpenAI-compatible (adapter trivial). Alternativa: Google Gemini Flash (free tier maior, porém usa dados para treino no tier gratuito — pior para LGPD).
+
+### Correções aplicadas na Fase 1 ("Fase 1.5")
+1. ✅ Auth: middleware `apiKeyAuth` (`x-api-key`, env `API_KEY`; vazio = desabilitado em dev/teste, obrigatório em produção). `/health` é público. Testes em `tests/api-key.test.ts`.
+2. ✅ `express.json({ limit: '100kb' })`
+3. ✅ `helmet()` + rate limiting em memória (`rate-limit.middleware.ts`: 120 req/min por IP → 429)
+4. ✅ Limites de tamanho nos validators Zod (nome/telefone/email/observações etc.)
+5. ✅ Criado `.env.example`
+6. ✅ `evento.service.create` agora tem ação compensatória: se a atualização do lead falha, o evento é removido (transação do Mongo exigiria replica set; registrado como opção futura)
+7. ✅ Enum de status com fonte única (`LEAD_STATUS` importado nos validators)
+8. ✅ Logger redact inclui header `x-api-key`
+
+Verificação: `tsc --noEmit`, ESLint e 78 testes passando.
+
+### Débito técnico restante (aceito/adiado)
+- [ ] Soft delete em `DELETE /api/leads` (eventos referenciam leads)
+- [ ] `updateById` usa `$set` — não permite desmarcar campos (`$unset`)
+- [ ] Garantir criação explícita de índices em produção (hoje depende de `autoIndex`)
+- [ ] Rate limiter em memória — trocar por solução distribuída se houver múltiplas instâncias
+
+## 10. Pendências observadas nesta análise
+
 - [ ] Definir `OLLAMA_MODEL` no `.env`
 - [ ] Iniciar Fase 2: integração WhatsApp (whatsapp-web.js) atrás de adapter

@@ -6,7 +6,14 @@ export function createLogger() {
 	return pino({
 		level: env.LOG_LEVEL ?? 'info',
 		redact: {
-			paths: ['req.headers.authorization', 'password', 'token', '*.password', '*.token'],
+			paths: [
+				'req.headers.authorization',
+				'req.headers["x-api-key"]',
+				'password',
+				'token',
+				'*.password',
+				'*.token',
+			],
 			censor: '[redacted]',
 		},
 	});

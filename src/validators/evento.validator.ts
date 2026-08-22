@@ -8,7 +8,7 @@ export const createEventoSchema = z
 	.object({
 		tipo: z.enum(EVENTO_TIPOS),
 		data: isoDate.optional(),
-		observacoes: z.string().trim().optional(),
+		observacoes: z.string().trim().max(2000).optional(),
 	})
 	.strip();
 

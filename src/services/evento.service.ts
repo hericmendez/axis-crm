@@ -47,7 +47,11 @@ export async function create(input: CreateEventoInput): Promise<Evento> {
 	const patch = buildPatch(evento.tipo, dataEvento);
 	const updated = await leadRepository.updateById(input.leadId, patch);
 	if (!updated) {
-		logger.error({ eventoId: evento.id, leadId: input.leadId }, 'Evento criado mas falha ao atualizar lead');
+		const compensated = await eventoRepository.deleteById(evento.id);
+		logger.error(
+			{ eventoId: evento.id, leadId: input.leadId, compensado: compensated },
+			'Falha ao aplicar efeitos do evento no lead',
+		);
 		throw new AppError(500, 'Falha ao aplicar efeitos do evento no lead');
 	}
 
