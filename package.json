@@ -1,0 +1,42 @@
+{
+	"name": "axis-crm",
+	"version": "0.1.0",
+	"description": "Assistente comercial conversacional para WhatsApp",
+	"type": "module",
+	"main": "dist/server.js",
+	"scripts": {
+		"dev": "tsx watch --env-file=.env src/server.ts",
+		"build": "tsc",
+		"start": "node dist/server.js",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint src tests",
+		"format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+		"test": "vitest run"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"dependencies": {
+		"dotenv": "^17.2.1",
+		"express": "^5.1.0",
+		"mongoose": "^8.16.0",
+		"pino": "^9.7.0",
+		"pino-http": "^10.4.0",
+		"zod": "^4.0.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/express": "^5.0.3",
+		"@types/node": "^24.0.0",
+		"@types/supertest": "^6.0.3",
+		"eslint": "^9.30.0",
+		"eslint-config-prettier": "^10.1.5",
+		"mongodb-memory-server": "^11.2.0",
+		"prettier": "^3.6.0",
+		"supertest": "^7.1.0",
+		"tsx": "^4.20.0",
+		"typescript": "^5.8.0",
+		"typescript-eslint": "^8.35.0",
+		"vitest": "^3.2.0"
+	}
+}

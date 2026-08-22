@@ -1,0 +1,21 @@
+axis-rewrite-docs/
+    ├── .env.example
+    ├── .gitignore
+    ├── README.md
+    ├── docs/
+    │   ├── 00-roadmap.md
+    │   ├── 01-architecture.md
+    │   ├── 02-domain.md
+    │   ├── 03-ai.md
+    │   ├── 04-mvc.md
+    │   ├── 05-whatsapp.md
+    │   ├── 06-integrations.md
+    │   ├── 07-api.md
+    │   ├── 08-environment.md
+    │   ├── 09-testing.md
+    │   ├── 10-security.md
+    │   ├── 11-development-rules.md
+    │   ├── 12-codex-ollama-workflow.md
+    │   ├── 13-conversation-memory.md
+    │   └── 14-definition-of-done.md
+    └── generate-tree.js
