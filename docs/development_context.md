@@ -4,7 +4,7 @@
 
 ## 1. Objetivo do projeto
 
-**Axis CRM** (`package.json` name: `axis-crm`, v0.1.0) — rewrite de um CRM existente cujo núcleo é um **assistente comercial conversacional para WhatsApp**. O assistente interpreta linguagem natural (LLM local via Ollama) e executa operações de CRM: leads, agenda, eventos de venda e métricas.
+**Axis CRM** (`package.json` name: `axis-crm`, v0.1.0) — rewrite de um CRM existente cujo núcleo é um **assistente comercial conversacional para WhatsApp**. O assistente interpreta linguagem natural (LLM em nuvem via adapter Groq; Ollama descartado como plano principal, mantido só como possível fallback futuro) e executa operações de CRM: leads, agenda, eventos de venda e métricas.
 
 Princípio central: **o LLM conversa/interpreta, mas nunca acessa banco nem executa ações diretamente.** Toda ação passa por código determinístico (services/tools). O projeto deve permanecer executável sem frontend.
 
@@ -54,7 +54,7 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 
 **Adapter Groq (início antecipado da Fase 3)**: `src/types/ai.ts` (`LLMProvider`, saída estruturada ACTION|CHAT validada por Zod), `src/ai/providers/groq.provider.ts`, `src/ai/llm.factory.ts`. Modelo default `openai/gpt-oss-120b`; latência real medida ~874ms.
 
-**Fase 2 — WhatsApp**: ver checkpoint detalhado na seção 12. Resumo: adapter whatsapp-web.js isolado, filtro de mensagens, boundary de saída (`WhatsAppClient`) e rate limiter concorrência-seguro prontos; autenticação real bloqueada por falta de número dedicado.
+**Fase 2 — WhatsApp**: ver checkpoint detalhado na seção 12. Resumo: adapter whatsapp-web.js isolado, filtro de mensagens, boundary de saída (`WhatsAppClient`) e rate limiter concorrência-seguro prontos; autenticação real VERIFICADA com número dedicado (2026-08-24).
 
 ### Não existe ainda
 
@@ -68,13 +68,13 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 | 0 | Fundação (env, app, server, logs, health, testes) | ✅ |
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
-| 2 | WhatsApp: adapter, filtro, boundary de saída prontos; **autenticação real bloqueada** (sem número dedicado — dependência externa) | 🔶 checkpoint |
+| 2 | WhatsApp: adapter, filtro, boundary de saída prontos; **autenticação real verificada** ✅ (número dedicado) | 🔶 checkpoint |
 | 3 | IA: adapter Groq ✅ antecipado; faltam ConversationService, AI Orchestrator, router de intenção, tool calling, memória (docs/13), fallback Ollama | 🔶 parcial |
 | 4 | Integrações Google Calendar / Sheets como adapters isolados | ⬜ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** (a) quando houver número dedicado → autenticação real do WhatsApp; ou (b) Fase 3 — encadear mensagens aceitas ao pipeline de IA (independente do WhatsApp).
+**Próximos passos imediatos:** (a) ~~autenticação real~~ ✅ concluída; próximo: Fase 3 — encadear mensagens aceitas ao pipeline de IA (independente do WhatsApp).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
@@ -178,7 +178,7 @@ Verificação: typecheck, lint e **100 testes** passando.
 - Testes novos: 2 envios concorrentes via `Promise.allSettled` (apenas 1 chega ao client, outro recebe 429); falha do provider libera a reserva para envio imediato; teste de intervalo migrado para fake timers.
 - Verificação: typecheck, lint e **102 testes** passando.
 
-### CHECKPOINT Fase 2 (2026-08-22) — integração WhatsApp aguardando número dedicado
+### CHECKPOINT Fase 2 (2026-08-24) — autenticação real VERIFICADA
 
 **Concluído (código):**
 - Adapter de entrada whatsapp-web.js com sessão persistente (LocalAuth), QR, status e graceful shutdown
@@ -186,24 +186,47 @@ Verificação: typecheck, lint e **100 testes** passando.
 - Boundary de saída: interface `WhatsAppClient` + `whatsapp.service.sendMessage()`
 - Rate limiter de envio concorrência-seguro (reserva atômica; falha libera slot)
 - Tratamento de erros do provider (502 sem vazamento interno)
-- 102 testes unitários/integração; whatsapp-web.js importado apenas pelo adapter (verificado por grep)
+- **106 testes** unitários/integração; whatsapp-web.js importado apenas pelo adapter (verificado por grep)
+- Script de integração one-shot: `scripts/whatsapp-outbound-test.ts` (envia via service, não via wwjs)
 
-**Bloqueado (dependência externa, NÃO é defeito de código):**
-- Autenticação real do WhatsApp: não há número/SIM dedicado disponível para o CRM. Desenvolvimento da integração para neste ponto até o número existir.
+**Verificado em ambiente real (número dedicado +55 16 99168-3518):**
+- Autenticação real por QR com a conta WhatsApp Business dedicada ✅
+- Identidade confirmada via log `WhatsApp autenticado como` (`client.info.wid.user`) ✅
+- Persistência LocalAuth: múltiplos restarts restauraram a sessão sem novo QR ✅
+  - Atenção: kill não-graceful do Chrome deixa `SingletonLock` em `.wwebjs_auth/session/` e a próxima inicialização **trava em `conectando`** — remover os arquivos `Singleton*` resolve
+- Conta adicionada ao grupo alvo "Axis CRM - Grazi (DEV TEST)" ✅
+- Mensagens reais de entrada verificadas (grupo autorizado, anti-loop fromMe) ✅
+- Menção real ao Axis processada e aceita ✅ (ver abaixo: LID)
+- Envio outbound real verificado via `scripts/whatsapp-outbound-test.ts` → mensagem chegou ao grupo; eco `fromMe` corretamente ignorado ✅
 
-**Adiado para a etapa de autenticação real:**
-- Obter/configurar o número dedicado do Axis
-- Autenticar a sessão (escanear QR com WHATSAPP_ENABLED=true)
-- Verificar persistência da sessão (restarts)
-- Adicionar o Axis ao grupo alvo
-- Verificar mensagens reais de entrada e saída
-- Definir/configurar identificação de grupos em produção
-- Conectar mensagens aceitas ao pipeline de IA (Fase 3)
+**Descobertas importantes da sessão real (2026-08-24):**
+
+1. **Menções usam LID, não número telefônico.** Com o endereçamento novo do WhatsApp,
+   `msg.mentionedIds` contém identificadores `@lid` (ex.: `257256360804483@lid`) cujos dígitos
+   **não derivam** de `AXIS_NUMBER` — comparar só por número é insuficiente. O corpo cru da
+   mensagem traz a menção literalmente como `@<LID>` (por isso o fallback textual `/@axis\b/i`
+   raramente casa). Solução: `FilterConfig.selfIds` recebe `AXIS_NUMBER` **e**
+   `WHATSAPP_SELF_LID` (env nova); comparação por dígitos contra qualquer identificador próprio.
+   Como obter o LID: log diagnóstico ou enviar uma menção real ao Axis e ler `mentionedIds`.
+2. **Sessão deve ser autenticada com a conta Business dedicada.** Na primeira autenticação o QR
+   foi escaneado com a conta pessoal por engano: todas as mensagens do dev chegavam como
+   `fromMe=true` e eram silenciosamente ignoradas (anti-loop correto). Sempre conferir o log
+   `wid` no `ready` para validar a identidade.
+3. **Puppeteer 24 quebra `msg.getChat()`/`getContact()`** (erro `ExecutionContext.#evaluate`).
+   O adapter usa campos síncronos do `Message`: `msg.id.remote` = JID real do chat,
+   `msg.id.participant`/`msg.author` = remetente em grupo. NÃO voltar a usar getChat/getContact.
+4. **JIDs de grupo podem variar entre sessões** (`@g.us` vs `@lid` observados). O grupo alvo
+   atual estabilizou como `120363411068401347@g.us`, configurado em `WHATSAPP_ALLOWED_GROUPS`.
+5. `loading_screen` pode disparar DEPOIS de `ready` (sync de histórico) e rebaixava o status
+   para `conectando` para sempre — corrigido: não rebaixa se já `conectado`.
+6. `status@broadcast`/`@newsletter`/`@broadcast` são rejeitados pelo filtro ("chat não suportado").
+
+**Próximos passos da Fase 3:** encadear mensagens aceitas ao ConversationService → AI Orchestrator.
 
 ## 11. Pendências
 
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)
-- [ ] Autenticação real do WhatsApp (bloqueada por falta de número dedicado — ver checkpoint na seção 12)
+- [x] Autenticação real do WhatsApp ✅ (2026-08-24 — ver checkpoint na seção 12)
 - [ ] Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória conversacional (docs/13)
 - [ ] Adapter Ollama (fallback local)
 
