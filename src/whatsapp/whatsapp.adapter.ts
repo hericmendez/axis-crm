@@ -56,7 +56,7 @@ export async function start(): Promise<void> {
 	// msg.id.remote (JID do chat; @g.us = grupo) e o remetente em
 	// msg.id.participant/author — msg.from/to não são confiáveis com endereçamento LID.
 
-	client.on('message_create', (msg: Message) => {
+	client.on('message_create', async (msg: Message) => {
 		try {
 			const chatId = msg.id.remote || msg.to;
 			whatsappService.handleIncomingMessage(
@@ -73,7 +73,8 @@ export async function start(): Promise<void> {
 				String(msg.author ?? (msg.id as { participant?: string }).participant ?? msg.from),
 			);
 		} catch (err) {
-			logger.error({ err }, 'Falha ao processar mensagem recebida');
+			// Falhas de persistência não derrubam o client; são logadas com contexto.
+			logger.error({ err, chatId: msg.id?.remote }, 'Falha ao processar mensagem recebida');
 		}
 	});
 

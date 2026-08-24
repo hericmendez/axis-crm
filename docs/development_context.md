@@ -223,6 +223,41 @@ Verificação: typecheck, lint e **100 testes** passando.
 
 **Próximos passos da Fase 3:** encadear mensagens aceitas ao ConversationService → AI Orchestrator.
 
+## 13. Sessão de 2026-08-24 (2) — Fase 3 etapa 1: ConversationService
+
+Implementado:
+
+- `src/types/conversa.ts`: `Conversa` (canal, chatIdExterno, leadId opcional, mensagens embutidas), `MensagemConversa` (papel `usuario|axis`, conteudo, criadoEm), tipos de input
+- `src/models/conversa.model.ts`: schema Mongoose com `mensagens` **embutidas** (ordem cronológica determinística, append atômico via `$push`) e índice único `{canal, chatIdExterno}`
+- `src/repositories/conversa.repository.ts`: findOrCreate (upsert atômico), findById, appendMessage, associateLead
+- `src/services/conversa.service.ts`: `getOrCreate`, `get`, `appendMessage`, `getRecentMessages(limit, default 20, máx 100)`, `associateLead`
+- Lead association: **explícita e opcional** (valida existência do lead); resolução automática conversa→lead fica para etapa futura
+- Independente de whatsapp-web.js/Groq/HTTP — recebe apenas identificadores normalizados de aplicação
+- Testes: `tests/integration/conversa.service.test.ts` (16 casos com mongodb-memory-server)
+
+Verificação: typecheck, lint e **122 testes** passando.
+
+### Próximos passos da Fase 3
+- [x] Etapa 2: ligar mensagens aceitas pelo filtro WhatsApp ao ConversationService (2026-08-24)
+- [ ] Etapa 3: AI Orchestrator consumindo contexto via ConversationService
+- [ ] Router de intenção + tool calling; memória longa (summary) quando histórico crescer
+
+## 14. Sessão de 2026-08-24 (3) — Fase 3 etapa 2: WhatsApp → ConversationService
+
+Integração implementada:
+
+- `whatsapp.service.handleIncomingMessage` agora é async e, **apenas após o filtro aceitar** a mensagem, chama `conversaService.getOrCreate('whatsapp', msg.chatId)` + `appendMessage(papel 'usuario')`
+- Mensagens rejeitadas retornam antes de qualquer chamada de persistência — **nenhuma conversa é criada** para mensagens filtradas (anti-loop fromMe, grupos não autorizados, sem menção, chats não suportados)
+- Adapter apenas tornou o handler `message_create` async (await) — falha de persistência cai no try/catch existente e é logada com chatId; nada é engolido silenciosamente e nenhuma resposta é enviada
+- Nenhuma regra do filtro foi alterada; nenhum tipo WhatsApp mudou; whatsapp-web.js continua isolado no adapter
+- `chatIdExterno` da conversa = mesmo JID normalizado já produzido pela camada WhatsApp (`msg.id.remote`) — sem nova política de identidade
+- Testes: `tests/integration/whatsapp-conversa.test.ts` (4 casos com mongodb-memory-server): DM aceita cria conversa + persiste como usuario; múltiplas mensagens reutilizam a mesma conversa; mensagem própria não cria nada; grupo sem menção não persiste
+
+Verificação: typecheck, lint e **126 testes** passando.
+
+### Próximo passo
+Etapa 3: AI Orchestrator consumindo o contexto persistido via ConversationService (Groq), depois router de intenção.
+
 ## 11. Pendências
 
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)

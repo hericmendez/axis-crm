@@ -5,6 +5,7 @@ import { AppError } from '../utils/errors.js';
 import * as sendRateLimiter from './send-rate-limiter.js';
 import { getEnv } from '../config/env.js';
 import { logger } from '../utils/logger.js';
+import * as conversaService from '../services/conversa.service.js';
 
 export type WhatsAppStatus = 'desconectado' | 'aguardando_qr' | 'conectando' | 'conectado';
 
@@ -62,7 +63,10 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
 	}
 }
 
-export function handleIncomingMessage(msg: IncomingMessageInfo, senderName: string): void {
+export async function handleIncomingMessage(
+	msg: IncomingMessageInfo,
+	senderName: string,
+): Promise<void> {
 	const env = getEnv();
 	const config: FilterConfig = {
 		selfIds: [env.AXIS_NUMBER, env.WHATSAPP_SELF_LID]
@@ -79,9 +83,13 @@ export function handleIncomingMessage(msg: IncomingMessageInfo, senderName: stri
 		return;
 	}
 
-	// TODO Fase 3: encaminhar para ConversationService → AI Orchestrator
+	// Mensagens rejeitadas NUNCA chegam aqui: nenhuma conversa é criada/persistida.
+	const conversa = await conversaService.getOrCreate('whatsapp', msg.chatId);
+	await conversaService.appendMessage(conversa.id, { papel: 'usuario', conteudo: msg.body });
+
+	// TODO Fase 3 (etapa 3): encaminhar para o AI Orchestrator
 	logger.info(
-		{ chatId: msg.chatId, de: senderName, texto: msg.body.slice(0, 100) },
-		'Mensagem aceita para processamento',
+		{ chatId: msg.chatId, de: senderName, conversaId: conversa.id, texto: msg.body.slice(0, 100) },
+		'Mensagem aceita e persistida na conversa',
 	);
 }
