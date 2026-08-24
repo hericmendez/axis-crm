@@ -1,11 +1,12 @@
-import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
+import wwjs, { type Message } from 'whatsapp-web.js';
+const { Client, LocalAuth } = wwjs;
 import qrcode from 'qrcode-terminal';
 import type { WhatsAppClient } from '../types/whatsapp.js';
 import * as whatsappService from './whatsapp.service.js';
 import { getEnv } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
-let client: Client | undefined;
+let client: InstanceType<typeof Client> | undefined;
 
 const whatsappClientAdapter: WhatsAppClient = {
 	async sendText(chatId: string, text: string): Promise<void> {
@@ -30,8 +31,16 @@ export async function start(): Promise<void> {
 		whatsappService.setQr(qr);
 	});
 
-	client.on('loading_screen', () => whatsappService.setStatus('conectando'));
+	client.on('loading_screen', () => {
+		// O loading_screen pode disparar depois do ready (sincronização de histórico);
+		// não rebaixa o status se já estamos conectados.
+		if (whatsappService.getStatus().status !== 'conectado') {
+			whatsappService.setStatus('conectando');
+		}
+	});
 	client.on('ready', () => {
+		// Identidade da sessão autenticada (número do próprio client).
+		logger.info({ wid: client?.info?.wid?.user }, 'WhatsApp autenticado como');
 		whatsappService.setQr(undefined);
 		whatsappService.setStatus('conectado');
 		whatsappService.setClient(whatsappClientAdapter);
@@ -42,20 +51,26 @@ export async function start(): Promise<void> {
 		logger.warn({ reason }, 'WhatsApp desconectado');
 	});
 
-	client.on('message_create', async (msg: Message) => {
+	// Não usa msg.getChat()/getContact(): em whatsapp-web.js + Puppeteer 24 esses
+	// métodos falham com erro de ExecutionContext. O chat real está em
+	// msg.id.remote (JID do chat; @g.us = grupo) e o remetente em
+	// msg.id.participant/author — msg.from/to não são confiáveis com endereçamento LID.
+
+	client.on('message_create', (msg: Message) => {
 		try {
-			const chat = await msg.getChat();
-			const contact = await msg.getContact();
+			const chatId = msg.id.remote || msg.to;
 			whatsappService.handleIncomingMessage(
 				{
 					fromMe: msg.fromMe,
-					isGroup: chat.isGroup,
-					chatId: chat.id._serialized,
+					// Com endereçamento LID o chat de grupo pode não terminar em @g.us;
+					// msg.author só existe em mensagens de grupo.
+					isGroup: chatId.endsWith('@g.us') || msg.author !== undefined,
+					chatId,
 					body: msg.body,
 					hasMention: (msg.mentionedIds ?? []).length > 0,
 					mentionedNumbers: (msg.mentionedIds ?? []).map(String),
 				},
-				contact.pushname ?? contact.number,
+				String(msg.author ?? (msg.id as { participant?: string }).participant ?? msg.from),
 			);
 		} catch (err) {
 			logger.error({ err }, 'Falha ao processar mensagem recebida');

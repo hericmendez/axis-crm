@@ -3,7 +3,7 @@ import { shouldProcessMessage } from '../../src/whatsapp/message-filter.js';
 import type { IncomingMessageInfo } from '../../src/whatsapp/message-filter.js';
 
 const config = {
-	selfNumber: '5511999999999',
+	selfIds: ['5511999999999'],
 	allowedGroups: ['grupo-autorizado@g.us'],
 };
 
@@ -25,6 +25,21 @@ describe('shouldProcessMessage', () => {
 		expect(r.process).toBe(false);
 	});
 
+	it('ignora status@broadcast', () => {
+		const r = shouldProcessMessage(
+			msg({ isGroup: false, chatId: 'status@broadcast', body: '' }),
+			config,
+		);
+		expect(r.process).toBe(false);
+	});
+
+	it('ignora newsletters e broadcasts', () => {
+		for (const chatId of ['123@newsletter', '456@broadcast']) {
+			const r = shouldProcessMessage(msg({ isGroup: false, chatId }), config);
+			expect(r.process).toBe(false);
+		}
+	});
+
 	it('ignora grupo não autorizado', () => {
 		const r = shouldProcessMessage(msg({ chatId: 'outro@g.us' }), config);
 		expect(r.process).toBe(false);
@@ -37,6 +52,21 @@ describe('shouldProcessMessage', () => {
 	});
 
 	it('processa quando o número do Axis é mencionado', () => {
+		const r = shouldProcessMessage(
+			msg({ mentionedNumbers: ['5511999999999@c.us'], body: '' }),
+			config,
+		);
+		expect(r.process).toBe(true);
+	});
+
+	it('processa quando o LID do Axis é mencionado', () => {
+		const r = shouldProcessMessage(
+			msg({ mentionedNumbers: ['257256360804483@lid'], body: 'texto qualquer' }),
+			{ selfIds: ['257256360804483@lid'], allowedGroups: config.allowedGroups },
+		);
+		expect(r.process).toBe(true);
+	});
+	it('processa menção por número mesmo com máscara', () => {
 		const r = shouldProcessMessage(
 			msg({ hasMention: true, mentionedNumbers: ['55 11 99999-9999'] }),
 			config,

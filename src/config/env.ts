@@ -16,6 +16,9 @@ const envSchema = z.object({
 	WHATSAPP_ENABLED: z.coerce.boolean().default(false),
 	WHATSAPP_ALLOWED_GROUPS: z.string().optional(),
 	AXIS_NUMBER: z.string().optional(),
+	// LID do próprio Axis (endereçamento novo do WhatsApp); necessário porque as
+	// menções chegam como @lid, cujos dígitos não derivam do número telefônico.
+	WHATSAPP_SELF_LID: z.string().optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
 	GOOGLE_REDIRECT_URI: z.string().optional(),

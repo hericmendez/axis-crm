@@ -65,7 +65,8 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
 export function handleIncomingMessage(msg: IncomingMessageInfo, senderName: string): void {
 	const env = getEnv();
 	const config: FilterConfig = {
-		selfNumber: env.AXIS_NUMBER,
+		selfIds: [env.AXIS_NUMBER, env.WHATSAPP_SELF_LID]
+			.filter((id): id is string => Boolean(id)),
 		allowedGroups: (env.WHATSAPP_ALLOWED_GROUPS ?? '')
 			.split(',')
 			.map((g) => g.trim())

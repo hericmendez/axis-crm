@@ -8,21 +8,33 @@ export interface IncomingMessageInfo {
 }
 
 export interface FilterConfig {
-	selfNumber?: string;
+	/** Identificadores do próprio Axis (número e/ou LID), comparados por dígitos. */
+	selfIds: string[];
 	allowedGroups: string[];
 }
 
 const MENTION_RE = /@axis\b/i;
+const UNSUPPORTED_CHAT_SUFFIXES = ['@newsletter', '@broadcast'];
+
+function isUnsupportedChat(chatId: string): boolean {
+	return (
+		chatId === 'status@broadcast' ||
+		UNSUPPORTED_CHAT_SUFFIXES.some((suffix) => chatId.endsWith(suffix))
+	);
+}
 
 function normalize(number: string): string {
 	return number.replace(/\D/g, '');
 }
 
 function wasMentioned(msg: IncomingMessageInfo, config: FilterConfig): boolean {
-	if (!config.selfNumber) return false;
-	const self = normalize(config.selfNumber);
-	if (msg.mentionedNumbers.some((n) => normalize(n) === self)) return true;
-	return MENTION_RE.test(msg.body);
+	// Fallback textual (@Axis no corpo).
+	if (MENTION_RE.test(msg.body)) return true;
+	const selfs = config.selfIds.map(normalize);
+	return msg.mentionedNumbers.some((n) => {
+		const digits = normalize(n);
+		return digits !== '' && selfs.includes(digits);
+	});
 }
 
 /**
@@ -33,6 +45,9 @@ export function shouldProcessMessage(
 	msg: IncomingMessageInfo,
 	config: FilterConfig,
 ): { process: boolean; reason: string } {
+	if (isUnsupportedChat(msg.chatId)) {
+		return { process: false, reason: 'chat não suportado' };
+	}
 	if (msg.fromMe) {
 		return { process: false, reason: 'mensagem própria' };
 	}
