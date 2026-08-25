@@ -68,13 +68,13 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 | 0 | Fundação (env, app, server, logs, health, testes) | ✅ |
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
-| 2 | WhatsApp: adapter, filtro, boundary de saída prontos; **autenticação real verificada** ✅ (número dedicado) | 🔶 checkpoint |
-| 3 | IA: adapter Groq ✅ antecipado; faltam ConversationService, AI Orchestrator, router de intenção, tool calling, memória (docs/13), fallback Ollama | 🔶 parcial |
+| 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
+| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; faltam AI Orchestrator, router de intenção, tool calling, memória longa (docs/13), fallback Ollama | 🔶 parcial |
 | 4 | Integrações Google Calendar / Sheets como adapters isolados | ⬜ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** (a) ~~autenticação real~~ ✅ concluída; próximo: Fase 3 — encadear mensagens aceitas ao pipeline de IA (independente do WhatsApp).
+**Próximos passos imediatos:** Fase 3 etapa 3 — AI Orchestrator consumindo contexto persistido via ConversationService (Groq).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
