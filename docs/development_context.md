@@ -33,7 +33,7 @@ Routes → Controllers → Services → Repositories/Integrations
 - Controllers finos; models nunca importados por controllers
 - Repositories isolam persistência
 - Integrações sempre atrás de adapters/interfaces (ex.: `interface LLMProvider`)
-- Pipeline de IA: mensagem → ConversationService → AI Orchestrator → LLM Adapter → JSON estruturado validado (`mode: ACTION|CHAT`, intent, confidence, parameters) → router de intenção → tool/service
+- Pipeline de IA: mensagem → ConversationService → AI Orchestrator → LLM Adapter → JSON estruturado validado (`mode: ACTION|CHAT`, intent, confidence, parameters) → router de intenção → internal tool → service
 - Memória conversacional em 3 camadas (short-term, summary, contexto CRM) — ver docs/13. O CRM é a fonte da verdade.
 
 ## 4. Estado atual da implementação
@@ -63,11 +63,11 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 - Intent router determinístico (5 intents reais)
 - Response builder (resultado → mensagem amigável)
 - Bug fix: `await` faltante em `whatsapp.adapter.ts`
+- **Memória conversacional longa**: summary persistido + threshold de mensagens + Summarizer via LLMProvider
+- **Internal Tools Layer**: 4 tools (CreateLeadTool, UpdateLeadTool, RegisterEventTool, ConsultAgendaTool) encapsulando chamadas a Domain Services; Intent Router delega para tools em vez de services diretamente
 
 ### Não existe ainda
 
-- Tool calling nativo do LLM (avaliar se necessário — intent-router atual já executa ações)
-- Memória longa (summary) quando histórico crescer
 - Fallback Ollama (provider local)
 - `src/integrations/` (Google Calendar/Sheets) — Fases 4–6 pendentes
 
@@ -79,12 +79,12 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
-| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅; faltam memória longa (summary), fallback Ollama | 🔶 parcial (etapas 1–3 concluídas) |
+| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅; faltam fallback Ollama | 🔶 parcial (etapas 1–3 + memória longa + internal tools concluídos) |
 | 4 | Integrações Google Calendar / Sheets como adapters isolados | ⬜ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Avaliar tool calling vs intent-router atual; implementar memória longa (summary) quando necessário; iniciar Fase 4 (Google Calendar).
+**Próximos passos imediatos:** Iniciar Fase 4 (Google Calendar). Tool calling nativo adiado (ver ADR-002).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
@@ -251,8 +251,8 @@ Verificação: typecheck, lint e **122 testes** passando.
 - [x] Etapa 2: ligar mensagens aceitas pelo filtro WhatsApp ao ConversationService (2026-08-24)
 - [x] Etapa 3: AI Orchestrator consumindo contexto via ConversationService (2026-08-27)
 - [x] Intent router determinístico (5 intents: CRIAR_LEAD, ATUALIZAR_LEAD, CONSULTAR_AGENDA, REGISTRAR_EVENTO, CONVERSAR)
-- [ ] Tool calling nativo do LLM (avaliar se necessário — intent-router atual já executa ações)
-- [ ] Memória longa (summary) quando histórico crescer
+- [ ] Tool calling nativo do LLM (avaliar se necessário — ver ADR-002: adiado)
+- [x] Memória longa (summary) — implementada com threshold, Summarizer via LLMProvider, persistência no modelo Conversa
 - [ ] Adapter Ollama (fallback local)
 
 ## 14. Sessão de 2026-08-24 (3) — Fase 3 etapa 2: WhatsApp → ConversationService
@@ -299,7 +299,9 @@ conversa.service.ts (getRecentMessages)
     ↓
 orchestrator.ts (contexto → LLM → Zod validation → routeIntent)
     ↓
-intent-router.ts (validação params → resolveLead → service call)
+intent-router.ts (validação params → resolveLead → internal tool)
+    ↓
+internal tools (CreateLeadTool, UpdateLeadTool, RegisterEventTool, ConsultAgendaTool)
     ↓
 lead.service / evento.service / metricasService
     ↓
@@ -311,7 +313,6 @@ whatsapp.service.ts (appendMessage axis → sendMessage)
 Testes: typecheck, lint e **155 testes** passando.
 
 ### Próximos passos
-- [ ] Avaliar tool calling vs intent-router atual (o router já executa ações diretamente)
 - [ ] Memória longa (summary) quando histórico crescer (docs/13)
 - [ ] Adapter Ollama (fallback local)
 - [ ] Fase 4: Google Calendar integration
@@ -322,7 +323,7 @@ Testes: typecheck, lint e **155 testes** passando.
 - [x] Autenticação real do WhatsApp ✅ (2026-08-24 — ver checkpoint na seção 12)
 - [x] AI Orchestrator + intent router ✅ (2026-08-27 — ver seção 15)
 - [ ] Memória longa (summary) quando histórico crescer
-- [ ] Tool calling nativo do LLM (avaliar se necessário)
+- [ ] Tool calling nativo do LLM (adiado — ver ADR-002)
 - [ ] Adapter Ollama (fallback local)
 
 ### Débito técnico da Fase 1 (aceito/adiado)

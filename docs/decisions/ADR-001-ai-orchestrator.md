@@ -27,7 +27,9 @@ AI Orchestrator (contexto → LLM → resultado)
     ↓
 LLM Provider (abstração existente)
     ↓
-Intent Router (validação → entity resolution → service call)
+Intent Router (validação → entity resolution → Internal Tool)
+    ↓
+Internal Tools (CreateLeadTool, UpdateLeadTool, RegisterEventTool, ConsultAgendaTool)
     ↓
 Domain Services (leadService, eventoService, metricasService)
     ↓
@@ -38,7 +40,12 @@ WhatsApp Service (persistência + envio)
 
 Componentes criados:
 - `src/ai/orchestrator.ts`: coordena o fluxo; depende de LLMProvider e IntentRouterDeps via injecção
-- `src/ai/intent-router.ts`: valida parâmetros, resolve entidades, delega services
+- `src/ai/intent-router.ts`: valida parâmetros, resolve entidades, delega para Internal Tools
+- `src/ai/tools/internal-tool.ts`: interface InternalTool<P> com execute(params) → Promise<OrchestratorResult>
+- `src/ai/tools/create-lead.tool.ts`: CRIAR_LEAD → leadService.create
+- `src/ai/tools/update-lead.tool.ts`: ATUALIZAR_LEAD → leadService.update
+- `src/ai/tools/register-event.tool.ts`: REGISTRAR_EVENTO → eventoService.create
+- `src/ai/tools/consult-agenda.tool.ts`: CONSULTAR_AGENDA → metricasService.agenda
 - `src/ai/response-builder.ts`: converte resultados em mensagens amigáveis (função pura)
 - `src/ai/errors.ts`: tipos de erro discriminados
 

@@ -2,6 +2,11 @@ import type { StructuredOutput, Intent } from '../types/ai.js';
 import type { Lead, LeadStatus } from '../types/lead.js';
 import type { EventoTipo } from '../types/evento.js';
 import type { OrchestratorResult } from './errors.js';
+import type { InternalTool } from './tools/internal-tool.js';
+import type { CreateLeadInput } from './tools/create-lead.tool.js';
+import type { UpdateLeadInput } from './tools/update-lead.tool.js';
+import type { RegisterEventInput } from './tools/register-event.tool.js';
+import type { ConsultAgendaInput } from './tools/consult-agenda.tool.js';
 
 export interface IntentRouterDeps {
 	leadService: {
@@ -29,6 +34,12 @@ export interface IntentRouterDeps {
 		findById: (id: string) => Promise<Lead | null>;
 		findByTelefone: (telefone: string) => Promise<Lead | null>;
 		findByName: (nome: string) => Promise<Lead[]>;
+	};
+	tools: {
+		createLead: InternalTool<CreateLeadInput>;
+		updateLead: InternalTool<UpdateLeadInput>;
+		registerEvent: InternalTool<RegisterEventInput>;
+		consultAgenda: InternalTool<ConsultAgendaInput>;
 	};
 }
 
@@ -121,17 +132,12 @@ export async function routeIntent(
 	try {
 		switch (intent) {
 			case 'CRIAR_LEAD': {
-				const result = await deps.leadService.create({
+				return await deps.tools.createLead.execute({
 					nome: params.nome as string,
 					telefone: params.telefone as string,
 					contatoOrigem: 'whatsapp',
 					...(params.status ? { status: params.status as LeadStatus } : {}),
 				});
-				return {
-					type: 'SUCCESS',
-					message: `Lead criado: ${result.nome} (${result.telefone}).`,
-					data: result,
-				};
 			}
 
 			case 'ATUALIZAR_LEAD': {
@@ -170,12 +176,10 @@ export async function routeIntent(
 				if (params.renda) patch.renda = params.renda;
 				if (params.observacoes) patch.observacoes = params.observacoes;
 
-				const updated = await deps.leadService.update(resolution.lead.id, patch);
-				return {
-					type: 'SUCCESS',
-					message: `Lead atualizado: ${updated.nome}.`,
-					data: updated,
-				};
+				return await deps.tools.updateLead.execute({
+					leadId: resolution.lead.id,
+					patch,
+				});
 			}
 
 			case 'CONSULTAR_AGENDA': {
@@ -184,24 +188,8 @@ export async function routeIntent(
 				const ate = params.ate
 					? new Date(params.ate as string)
 					: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-				const items = await deps.metricasService.agenda(de, ate);
-				if (items.length === 0) {
-					return {
-						type: 'SUCCESS',
-						message: 'Nenhum agendamento encontrado para este período.',
-					};
-				}
-				const lista = items
-					.map((item: unknown) => {
-						const i = item as { nome?: string; dataAgendamento?: Date };
-						return `- ${i.nome ?? 'Sem nome'} (${i.dataAgendamento ? new Date(i.dataAgendamento).toLocaleDateString('pt-BR') : 's/data'})`;
-					})
-					.join('\n');
-				return {
-					type: 'SUCCESS',
-					message: `Agendamentos:\n${lista}`,
-					data: items,
-				};
+
+				return await deps.tools.consultAgenda.execute({ de, ate });
 			}
 
 			case 'REGISTRAR_EVENTO': {
@@ -232,17 +220,13 @@ export async function routeIntent(
 					};
 				}
 
-				const evento = await deps.eventoService.create({
+				return await deps.tools.registerEvent.execute({
 					leadId: resolution.lead.id,
 					tipo: params.tipo as EventoTipo,
+					leadNome: resolution.lead.nome,
 					...(params.data ? { data: new Date(params.data as string) } : {}),
 					...(params.observacoes ? { observacoes: params.observacoes as string } : {}),
 				});
-				return {
-					type: 'SUCCESS',
-					message: `Evento registrado: ${params.tipo} para ${resolution.lead.nome}.`,
-					data: evento,
-				};
 			}
 
 			case 'CONVERSAR': {

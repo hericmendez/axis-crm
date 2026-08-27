@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createOrchestrator, type OrchestratorDeps } from '../../src/ai/orchestrator.js';
 import type { LLMProvider, StructuredOutput } from '../../src/types/ai.js';
-import type { MensagemConversa } from '../../src/types/conversa.js';
+import type { ConversationContext, MensagemConversa } from '../../src/types/conversa.js';
+import type { InternalTool } from '../../src/ai/tools/internal-tool.js';
+import type { OrchestratorResult } from '../../src/ai/errors.js';
+
+function makeTool(result: OrchestratorResult): InternalTool {
+	return { execute: vi.fn().mockResolvedValue(result) };
+}
 
 function makeLLM(output: StructuredOutput): LLMProvider {
 	return { complete: vi.fn().mockResolvedValue(output) };
@@ -20,10 +26,17 @@ function makeMessages(...contents: string[]): MensagemConversa[] {
 	}));
 }
 
+function makeContext(
+	recentMessages: MensagemConversa[] = [],
+	summary?: string,
+): ConversationContext {
+	return { summary, recentMessages };
+}
+
 function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
 	return {
 		llmProvider: makeLLM({ mode: 'CHAT', confidence: 0.9, response: 'Olá!' }),
-		getRecentMessages: vi.fn().mockResolvedValue([]),
+		getConversationContext: vi.fn().mockResolvedValue(makeContext()),
 		intentRouterDeps: {
 			leadService: {
 				create: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
@@ -40,6 +53,12 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
 				findById: vi.fn().mockResolvedValue(null),
 				findByTelefone: vi.fn().mockResolvedValue(null),
 				findByName: vi.fn().mockResolvedValue([]),
+			},
+			tools: {
+				createLead: makeTool({ type: 'SUCCESS', message: 'Lead criado: João (16999999999).' }),
+				updateLead: makeTool({ type: 'SUCCESS', message: 'Lead atualizado: João.' }),
+				registerEvent: makeTool({ type: 'SUCCESS', message: 'Evento registrado: VENDA para João.' }),
+				consultAgenda: makeTool({ type: 'SUCCESS', message: 'Agendamentos:\n- João (01/09/2026)' }),
 			},
 		},
 		...overrides,
@@ -88,13 +107,13 @@ describe('orchestrator', () => {
 		expect(result.type).toBe('LLM_ERROR');
 	});
 
-	it('envia contexto de mensagens anteriores ao LLM', async () => {
-		const messages = makeMessages('Olá', 'Como posso ajudar?', 'Quero criar um lead');
+	it('envia contexto de mensagens anteriores ao LLM sem duplicar mensagem atual', async () => {
+		const contextMessages = makeMessages('Olá', 'Como posso ajudar?', 'Quero criar um lead');
 		const deps = makeDeps({
-			getRecentMessages: vi.fn().mockResolvedValue(messages),
+			getConversationContext: vi.fn().mockResolvedValue(makeContext(contextMessages)),
 		});
 		const orchestrator = createOrchestrator(deps);
-		await orchestrator.processMessage('conv-1', 'Com telefone 16999999999');
+		await orchestrator.processMessage('conv-1', 'Quero criar um lead');
 
 		const llmCall = (deps.llmProvider.complete as ReturnType<typeof vi.fn>).mock.calls[0];
 		const chatMessages = llmCall[0].messages;
@@ -104,28 +123,34 @@ describe('orchestrator', () => {
 		expect(chatMessages[1].content).toBe('Como posso ajudar?');
 		expect(chatMessages[2].role).toBe('user');
 		expect(chatMessages[2].content).toBe('Quero criar um lead');
-		expect(chatMessages[3].role).toBe('user');
-		expect(chatMessages[3].content).toBe('Com telefone 16999999999');
+		expect(chatMessages).toHaveLength(3);
 	});
 
-	it('limita contexto a 10 mensagens', async () => {
-		const messages = makeMessages(
-			'm1', 'm2', 'm3', 'm4', 'm5',
-			'm6', 'm7', 'm8', 'm9', 'm10',
-			'm11', 'm12',
-		);
+	it('inclui summary como system message quando disponível', async () => {
+		const contextMessages = makeMessages('Olá', 'Tudo bem?', 'Quero criar um lead');
+		const summary = 'Usuário mencionou interesse em criar lead.';
 		const deps = makeDeps({
-			getRecentMessages: vi.fn().mockResolvedValue(messages),
+			getConversationContext: vi.fn().mockResolvedValue(makeContext(contextMessages, summary)),
 		});
 		const orchestrator = createOrchestrator(deps);
-		await orchestrator.processMessage('conv-1', 'última');
+		await orchestrator.processMessage('conv-1', 'Quero criar um lead');
 
-		expect(deps.getRecentMessages).toHaveBeenCalledWith('conv-1', 10);
+		const llmCall = (deps.llmProvider.complete as ReturnType<typeof vi.fn>).mock.calls[0];
+		const chatMessages = llmCall[0].messages;
+		expect(chatMessages[0].role).toBe('system');
+		expect(chatMessages[0].content).toContain(summary);
+		expect(chatMessages[1].role).toBe('user');
+		expect(chatMessages[1].content).toBe('Olá');
+		expect(chatMessages[2].role).toBe('assistant');
+		expect(chatMessages[2].content).toBe('Tudo bem?');
+		expect(chatMessages[3].role).toBe('user');
+		expect(chatMessages[3].content).toBe('Quero criar um lead');
+		expect(chatMessages).toHaveLength(4);
 	});
 
-	it('retorna INFRASTRUCTURE_ERROR quando getRecentMessages falha', async () => {
+	it('retorna INFRASTRUCTURE_ERROR quando getConversationContext falha', async () => {
 		const deps = makeDeps({
-			getRecentMessages: vi.fn().mockRejectedValue(new Error('MongoDB down')),
+			getConversationContext: vi.fn().mockRejectedValue(new Error('MongoDB down')),
 		});
 		const orchestrator = createOrchestrator(deps);
 		const result = await orchestrator.processMessage('conv-1', 'Olá');
@@ -144,5 +169,38 @@ describe('orchestrator', () => {
 		const orchestrator = createOrchestrator(deps);
 		const result = await orchestrator.processMessage('conv-1', 'Cria um lead João');
 		expect(result.type).toBe('MISSING_PARAMETERS');
+	});
+
+	it('não duplica mensagem quando recentMessages contém apenas a mensagem atual', async () => {
+		const currentMessage = makeMessages('Olá');
+		const deps = makeDeps({
+			getConversationContext: vi.fn().mockResolvedValue(makeContext(currentMessage)),
+		});
+		const orchestrator = createOrchestrator(deps);
+		await orchestrator.processMessage('conv-1', 'Olá');
+
+		const llmCall = (deps.llmProvider.complete as ReturnType<typeof vi.fn>).mock.calls[0];
+		const chatMessages = llmCall[0].messages;
+		expect(chatMessages).toHaveLength(1);
+		expect(chatMessages[0].role).toBe('user');
+		expect(chatMessages[0].content).toBe('Olá');
+	});
+
+	it('contexto correto com summary e 2 mensagens anteriores', async () => {
+		const contextMessages = makeMessages('Oi', 'Olá', 'Quero criar lead');
+		const summary = 'Conversa inicial.';
+		const deps = makeDeps({
+			getConversationContext: vi.fn().mockResolvedValue(makeContext(contextMessages, summary)),
+		});
+		const orchestrator = createOrchestrator(deps);
+		await orchestrator.processMessage('conv-1', 'Quero criar lead');
+
+		const llmCall = (deps.llmProvider.complete as ReturnType<typeof vi.fn>).mock.calls[0];
+		const chatMessages = llmCall[0].messages;
+		expect(chatMessages).toHaveLength(4);
+		expect(chatMessages[0]).toEqual({ role: 'system', content: expect.stringContaining(summary) });
+		expect(chatMessages[1]).toEqual({ role: 'user', content: 'Oi' });
+		expect(chatMessages[2]).toEqual({ role: 'assistant', content: 'Olá' });
+		expect(chatMessages[3]).toEqual({ role: 'user', content: 'Quero criar lead' });
 	});
 });
