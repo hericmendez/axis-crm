@@ -38,7 +38,7 @@ Routes → Controllers → Services → Repositories/Integrations
 
 ## 4. Estado atual da implementação
 
-Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter Groq). Ver `git log --oneline`.
+Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter Groq + AI Orchestrator). Ver `git log --oneline`.
 
 ### Concluído
 
@@ -46,7 +46,7 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 
 - `src/config/env.ts`: env carregada/validada num único módulo via Zod, cacheada (`getEnv`)
 - `src/app.ts` / `src/server.ts`: Express + pino-http, graceful shutdown (SIGINT/SIGTERM, timeout 10s), handlers de unhandledRejection/uncaughtException, conexão Mongo
-- **Domínio Lead completo**: model (telefone único), repository (CRUD, paginação, agregações), service com regras de negócio (normalização de telefone, duplicidade → 409, `dataConversao` só com status VENDIDO, auto-set na venda), controller fino com validação Zod, rotas `/api/leads`
+- **Domínio Lead completo**: model (telefone único), repository (CRUD, paginação, agregações, `findByName`), service com regras de negócio (normalização de telefone, duplicidade → 409, `dataConversao` só com status VENDIDO, auto-set na venda), controller fino com validação Zod, rotas `/api/leads`
 - **Eventos**: model/service/repository — criar evento aplica efeitos no lead; ação compensatória se a atualização do lead falhar
 - **Agenda**: `GET /api/agenda`; **Métricas**: `GET /api/metricas`
 - Health check, error handler / not-found middlewares, `AppError`, utilitário de telefone
@@ -56,9 +56,19 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 
 **Fase 2 — WhatsApp**: ver checkpoint detalhado na seção 12. Resumo: adapter whatsapp-web.js isolado, filtro de mensagens, boundary de saída (`WhatsAppClient`) e rate limiter concorrência-seguro prontos; autenticação real VERIFICADA com número dedicado (2026-08-24).
 
+**Fase 3 etapas 1–3 — IA** (ver sessões 13, 14, 15):
+- ConversationService com mensagens embutidas e append atômico
+- WhatsApp → ConversationService (integração)
+- AI Orchestrator com context window, Zod validation, entity resolution
+- Intent router determinístico (5 intents reais)
+- Response builder (resultado → mensagem amigável)
+- Bug fix: `await` faltante em `whatsapp.adapter.ts`
+
 ### Não existe ainda
 
-- Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória conversacional
+- Tool calling nativo do LLM (avaliar se necessário — intent-router atual já executa ações)
+- Memória longa (summary) quando histórico crescer
+- Fallback Ollama (provider local)
 - `src/integrations/` (Google Calendar/Sheets) — Fases 4–6 pendentes
 
 ## 5. Roadmap (docs/00-roadmap.md)
@@ -69,12 +79,12 @@ Git: branch `main` com histórico de commits (fases 0–2 + hardening + adapter 
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
-| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; faltam AI Orchestrator, router de intenção, tool calling, memória longa (docs/13), fallback Ollama | 🔶 parcial |
+| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅; faltam memória longa (summary), fallback Ollama | 🔶 parcial (etapas 1–3 concluídas) |
 | 4 | Integrações Google Calendar / Sheets como adapters isolados | ⬜ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Fase 3 etapa 3 — AI Orchestrator consumindo contexto persistido via ConversationService (Groq).
+**Próximos passos imediatos:** Avaliar tool calling vs intent-router atual; implementar memória longa (summary) quando necessário; iniciar Fase 4 (Google Calendar).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
@@ -221,7 +231,7 @@ Verificação: typecheck, lint e **100 testes** passando.
    para `conectando` para sempre — corrigido: não rebaixa se já `conectado`.
 6. `status@broadcast`/`@newsletter`/`@broadcast` são rejeitados pelo filtro ("chat não suportado").
 
-**Próximos passos da Fase 3:** encadear mensagens aceitas ao ConversationService → AI Orchestrator.
+**Próximos passos da Fase 3:** ✅ AI Orchestrator implementado e conectado (2026-08-27).
 
 ## 13. Sessão de 2026-08-24 (2) — Fase 3 etapa 1: ConversationService
 
@@ -239,8 +249,11 @@ Verificação: typecheck, lint e **122 testes** passando.
 
 ### Próximos passos da Fase 3
 - [x] Etapa 2: ligar mensagens aceitas pelo filtro WhatsApp ao ConversationService (2026-08-24)
-- [ ] Etapa 3: AI Orchestrator consumindo contexto via ConversationService
-- [ ] Router de intenção + tool calling; memória longa (summary) quando histórico crescer
+- [x] Etapa 3: AI Orchestrator consumindo contexto via ConversationService (2026-08-27)
+- [x] Intent router determinístico (5 intents: CRIAR_LEAD, ATUALIZAR_LEAD, CONSULTAR_AGENDA, REGISTRAR_EVENTO, CONVERSAR)
+- [ ] Tool calling nativo do LLM (avaliar se necessário — intent-router atual já executa ações)
+- [ ] Memória longa (summary) quando histórico crescer
+- [ ] Adapter Ollama (fallback local)
 
 ## 14. Sessão de 2026-08-24 (3) — Fase 3 etapa 2: WhatsApp → ConversationService
 
@@ -258,11 +271,58 @@ Verificação: typecheck, lint e **126 testes** passando.
 ### Próximo passo
 Etapa 3: AI Orchestrator consumindo o contexto persistido via ConversationService (Groq), depois router de intenção.
 
+## 15. Sessão de 2026-08-27 — Fase 3 etapa 3: AI Orchestrator
+
+Implementado:
+
+- `src/ai/errors.ts`: tipos discriminados para resultados do orchestrator (SUCCESS, LLM_UNAVAILABLE, MISSING_PARAMETERS, VALIDATION_FAILED, INFRA_ERROR)
+- `src/ai/intent-router.ts`: validação de parâmetros, resolução de entidades (leadId, telefone, nome), roteamento determinístico para services
+- `src/ai/response-builder.ts`: função pura que converte resultados do orchestrator em mensagens amigáveis
+- `src/ai/orchestrator.ts`: coordena contexto → LLM → Zod validation → intent-router → resultado
+- `src/repositories/lead.repository.ts`: adicionado `findByName()` com busca case-insensitive via regex escapado
+- `src/whatsapp/whatsapp.service.ts`: adicionado `initOrchestrator()` e `handleIncomingMessage` agora chama orchestrator, persiste resposta Axis, envia via WhatsApp
+- `src/whatsapp/whatsapp.adapter.ts`: correção de `await` faltante em `handleIncomingMessage` (bug: rejection assíncrona escapava do try/catch)
+- `src/server.ts`: chama `whatsappService.initOrchestrator()` após conectar no MongoDB
+- `docs/decisions/ADR-001-ai-orchestrator.md`: ADR documentando decisão arquitetural
+- Testes: 29 novos (18 intent-router, 8 orchestrator, 3 integração WhatsApp→orchestrator)
+
+Fluxo implementado:
+
+```
+whatsapp-web.js message_create
+    ↓
+whatsapp.adapter.ts (FIX: await)
+    ↓
+whatsapp.service.ts (filtro → persistência → orchestrator → resposta → envio)
+    ↓
+conversa.service.ts (getRecentMessages)
+    ↓
+orchestrator.ts (contexto → LLM → Zod validation → routeIntent)
+    ↓
+intent-router.ts (validação params → resolveLead → service call)
+    ↓
+lead.service / evento.service / metricasService
+    ↓
+response-builder.ts (resultado → mensagem)
+    ↓
+whatsapp.service.ts (appendMessage axis → sendMessage)
+```
+
+Testes: typecheck, lint e **155 testes** passando.
+
+### Próximos passos
+- [ ] Avaliar tool calling vs intent-router atual (o router já executa ações diretamente)
+- [ ] Memória longa (summary) quando histórico crescer (docs/13)
+- [ ] Adapter Ollama (fallback local)
+- [ ] Fase 4: Google Calendar integration
+
 ## 11. Pendências
 
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)
 - [x] Autenticação real do WhatsApp ✅ (2026-08-24 — ver checkpoint na seção 12)
-- [ ] Fase 3 completa: ConversationService, AI Orchestrator, router de intenção, tool calling, memória conversacional (docs/13)
+- [x] AI Orchestrator + intent router ✅ (2026-08-27 — ver seção 15)
+- [ ] Memória longa (summary) quando histórico crescer
+- [ ] Tool calling nativo do LLM (avaliar se necessário)
 - [ ] Adapter Ollama (fallback local)
 
 ### Débito técnico da Fase 1 (aceito/adiado)
