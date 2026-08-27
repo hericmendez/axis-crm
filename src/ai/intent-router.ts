@@ -7,6 +7,9 @@ import type { CreateLeadInput } from './tools/create-lead.tool.js';
 import type { UpdateLeadInput } from './tools/update-lead.tool.js';
 import type { RegisterEventInput } from './tools/register-event.tool.js';
 import type { ConsultAgendaInput } from './tools/consult-agenda.tool.js';
+import { parseRelativeDateTime } from './date-parser.js';
+import { validateDateTime } from './date-validator.js';
+import { logger } from '../utils/logger.js';
 
 export interface IntentRouterDeps {
 	leadService: {
@@ -81,6 +84,8 @@ const REQUIRED_PARAMS: Record<Intent, string[]> = {
 
 const ENTITY_REF_INTENTS: Intent[] = ['ATUALIZAR_LEAD', 'REGISTRAR_EVENTO'];
 
+const EVENTOS_COM_DATA_OBRIGATORIA: EventoTipo[] = ['AGENDAMENTO', 'REAGENDAMENTO'];
+
 function validateParams(
 	intent: Intent,
 	params: Record<string, unknown>,
@@ -104,6 +109,7 @@ function validateParams(
 export async function routeIntent(
 	output: StructuredOutput,
 	deps: IntentRouterDeps,
+	userMessage?: string,
 ): Promise<OrchestratorResult> {
 	if (output.mode === 'CHAT') {
 		return { type: 'SUCCESS', message: output.response };
@@ -192,39 +198,94 @@ export async function routeIntent(
 				return await deps.tools.consultAgenda.execute({ de, ate });
 			}
 
-			case 'REGISTRAR_EVENTO': {
-				const resolution = await resolveLead(
-					{
-						leadId: params.leadId as string | undefined,
-						telefone: params.telefone as string | undefined,
-						leadRef: params.leadRef as string | undefined,
-					},
-					deps,
-				);
+		case 'REGISTRAR_EVENTO': {
+			const tipo = params.tipo as EventoTipo;
 
-				if (resolution.status === 'NOT_FOUND') {
-					return {
-						type: 'ENTITY_NOT_FOUND',
-						message: 'Lead não encontrado para registrar o evento.',
-					};
-				}
-				if (resolution.status === 'AMBIGUOUS') {
-					return {
-						type: 'AMBIGUOUS_ENTITY',
-						candidates: resolution.candidates.map((l) => ({
-							id: l.id,
-							nome: l.nome,
-							telefone: l.telefone,
-						})),
-						message: `Encontrei ${resolution.candidates.length} leads com esse nome. Qual deles você quer registrar o evento?`,
-					};
-				}
+			const resolution = await resolveLead(
+				{
+					leadId: params.leadId as string | undefined,
+					telefone: params.telefone as string | undefined,
+					leadRef: params.leadRef as string | undefined,
+				},
+				deps,
+			);
 
-				return await deps.tools.registerEvent.execute({
+			if (resolution.status === 'NOT_FOUND') {
+				logger.warn({ intent, tipo, leadRef: params.leadRef }, 'Lead not found');
+				return {
+					type: 'ENTITY_NOT_FOUND',
+					message: 'Lead não encontrado para registrar o evento.',
+				};
+			}
+			if (resolution.status === 'AMBIGUOUS') {
+				logger.warn({ intent, tipo, leadRef: params.leadRef, candidates: resolution.candidates.length }, 'Ambiguous lead');
+				return {
+					type: 'AMBIGUOUS_ENTITY',
+					candidates: resolution.candidates.map((l) => ({
+						id: l.id,
+						nome: l.nome,
+						telefone: l.telefone,
+					})),
+					message: `Encontrei ${resolution.candidates.length} leads com esse nome. Qual deles você quer registrar o evento?`,
+				};
+			}
+
+		let eventData: Date | undefined;
+
+		if (params.data) {
+			const rawDate = String(params.data);
+			const dateValidation = validateDateTime(rawDate);
+			if (!dateValidation.valid) {
+				logger.warn({ intent, tipo, rawDate, reason: dateValidation.code, field: dateValidation.field }, 'Date validation failed');
+				return {
+					type: dateValidation.code === 'PAST_DATE' ? 'PAST_DATE' : 'INVALID_DATE',
+					message: dateValidation.message,
+					field: dateValidation.field,
+				} as OrchestratorResult;
+			}
+			eventData = dateValidation.date;
+		} else if (userMessage) {
+			const parsed = parseRelativeDateTime(userMessage, new Date());
+			if (parsed) {
+				if (parsed.invalidTime) {
+					logger.warn({ intent, tipo, leadRef: params.leadRef }, 'Invalid time from parser');
+					return {
+						type: 'INVALID_TIME',
+						time: userMessage.match(/às?\s*(\S+)/i)?.[1] ?? '',
+						message: 'O horário informado é inválido. Informe um horário entre 00:00 e 23:59.',
+					} as OrchestratorResult;
+				}
+				eventData = parsed.date;
+			}
+		}
+
+		if (EVENTOS_COM_DATA_OBRIGATORIA.includes(tipo) && !eventData) {
+			logger.info({ intent, tipo, leadRef: params.leadRef }, 'Missing date for event');
+			const nomeLead = resolution.lead.nome;
+			return {
+				type: 'MISSING_PARAMETERS',
+				missing: ['data'],
+				message: `Para qual data e horário devo agendar com ${nomeLead}?`,
+			};
+		}
+
+		if (EVENTOS_COM_DATA_OBRIGATORIA.includes(tipo) && eventData) {
+			const now = new Date();
+			if (eventData.getTime() <= now.getTime()) {
+				logger.info({ intent, tipo, eventData: eventData.toISOString(), now: now.toISOString() }, 'Past date rejected');
+				return {
+					type: 'PAST_DATE',
+					message: 'Essa data já passou. Para qual data e horário você quer agendar?',
+				};
+			}
+		}
+
+				logger.info({ intent, tipo, leadId: resolution.lead.id, hasData: !!eventData, eventData: eventData?.toISOString() }, 'Executing registerEvent tool');
+			return await deps.tools.registerEvent.execute({
 					leadId: resolution.lead.id,
-					tipo: params.tipo as EventoTipo,
+					tipo,
 					leadNome: resolution.lead.nome,
-					...(params.data ? { data: new Date(params.data as string) } : {}),
+					...(eventData ? { data: eventData } : {}),
 					...(params.observacoes ? { observacoes: params.observacoes as string } : {}),
 				});
 			}

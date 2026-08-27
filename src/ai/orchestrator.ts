@@ -75,7 +75,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 			};
 		}
 
-		const result = await routeIntent(output, deps.intentRouterDeps);
+		const result = await routeIntent(output, deps.intentRouterDeps, userMessage);
 
 		if (result.type === 'SERVICE_ERROR') {
 			logger.error({ result, conversaId }, 'Erro de serviço ao processar intent');

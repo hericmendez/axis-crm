@@ -5,13 +5,19 @@ export function buildResponse(result: OrchestratorResult): string {
 		case 'SUCCESS':
 			return result.message;
 		case 'MISSING_PARAMETERS':
-			return `Para isso, preciso de mais informações: ${result.missing.join(', ')}.`;
+			return result.message ?? `Para isso, preciso de mais informações: ${result.missing.join(', ')}.`;
 		case 'AMBIGUOUS_ENTITY':
 			return result.message;
 		case 'ENTITY_NOT_FOUND':
 			return 'Não encontrei o lead solicitado. Pode verificar o nome ou telefone?';
 		case 'INVALID_INTENT':
 			return 'Desculpe, não consegui entender essa solicitação.';
+		case 'INVALID_DATE':
+			return result.message ?? 'Essa data não é válida. Qual data você quis dizer?';
+		case 'PAST_DATE':
+			return result.message ?? 'Essa data já passou. Para qual data e horário você quer agendar?';
+		case 'INVALID_TIME':
+			return result.message ?? `O horário ${result.time} é inválido. Informe um horário entre 00:00 e 23:59.`;
 		case 'LLM_ERROR':
 			return 'Estou com dificuldade para processar sua mensagem. Tente novamente em instantes.';
 		case 'SERVICE_ERROR':

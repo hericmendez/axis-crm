@@ -35,6 +35,23 @@ export interface InfrastructureError {
 	message: string;
 }
 
+export interface InvalidDate {
+	type: 'INVALID_DATE';
+	message: string;
+	field?: string;
+}
+
+export interface PastDate {
+	type: 'PAST_DATE';
+	message: string;
+}
+
+export interface InvalidTime {
+	type: 'INVALID_TIME';
+	message: string;
+	time: string;
+}
+
 export type OrchestratorResult =
 	| MissingParameters
 	| AmbiguousEntity
@@ -43,4 +60,7 @@ export type OrchestratorResult =
 	| LLMError
 	| ServiceError
 	| InfrastructureError
+	| InvalidDate
+	| PastDate
+	| InvalidTime
 	| { type: 'SUCCESS'; message: string; data?: unknown };

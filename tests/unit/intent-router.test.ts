@@ -303,6 +303,28 @@ describe('intent-router', () => {
 			);
 		});
 
+		it('resolve lead por nome quando há único resultado', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByName: vi.fn().mockResolvedValue([{ id: 'lead-103', nome: 'Pedro Lucas', telefone: '31999876543' }]),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadRef: 'Pedro Lucas', tipo: 'AGENDAMENTO', data: '2026-08-28T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			expect(deps.tools.registerEvent.execute).toHaveBeenCalledWith(
+				expect.objectContaining({ leadId: 'lead-103', tipo: 'AGENDAMENTO', leadNome: 'Pedro Lucas' }),
+			);
+		});
+
 		it('retorna ENTITY_NOT_FOUND quando lead não existe', async () => {
 			const deps = makeDeps();
 			const result = await routeIntent(
@@ -337,6 +359,238 @@ describe('intent-router', () => {
 				deps,
 			);
 			expect(result.type).toBe('AMBIGUOUS_ENTITY');
+		});
+
+		it('tipo já informado com data não retorna MISSING_PARAMETERS', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', tipo: 'AGENDAMENTO', data: '2026-08-28T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).not.toBe('MISSING_PARAMETERS');
+		});
+
+		it('AGENDAMENTO sem data retorna MISSING_PARAMETERS mesmo com tipo e lead', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', tipo: 'AGENDAMENTO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('MISSING_PARAMETERS');
+		});
+
+		it('tipo CALL mapeado como referência a AGENDAMENTO pelo LLM', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByName: vi.fn().mockResolvedValue([{ id: 'lead-1', nome: 'Pedro Lucas', telefone: '31999876543' }]),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadRef: 'Pedro Lucas', tipo: 'AGENDAMENTO', data: '2026-08-28T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			expect(deps.tools.registerEvent.execute).toHaveBeenCalledWith(
+				expect.objectContaining({ tipo: 'AGENDAMENTO' }),
+			);
+		});
+	});
+
+	describe('entity resolution', () => {
+		it('resolve por leadId', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', status: 'VENDIDO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+		});
+
+		it('resolve por telefone', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByTelefone: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { telefone: '16999999999', status: 'VENDIDO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+		});
+
+		it('resolve por leadRef (nome)', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByName: vi.fn().mockResolvedValue([{ id: 'lead-1', nome: 'Pedro Lucas', telefone: '31999876543' }]),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { leadRef: 'Pedro Lucas', status: 'VENDIDO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+		});
+
+		it('NOT_FOUND quando nome não existe', async () => {
+			const deps = makeDeps();
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { leadRef: 'Inexistente' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('ENTITY_NOT_FOUND');
+		});
+
+		it('AMBIGUOUS quando múltiplos nomes', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByName: vi.fn().mockResolvedValue([
+						{ id: 'lead-1', nome: 'Pedro Lucas', telefone: '11111111111' },
+						{ id: 'lead-2', nome: 'Pedro Lucas', telefone: '22222222222' },
+					]),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadRef: 'Pedro Lucas', tipo: 'AGENDAMENTO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('AMBIGUOUS_ENTITY');
+			if (result.type === 'AMBIGUOUS_ENTITY') {
+				expect(result.candidates).toHaveLength(2);
+			}
+		});
+
+		it('NOT_FOUND quando leadId não existe', async () => {
+			const deps = makeDeps();
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { leadId: 'nonexistent', status: 'VENDIDO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('ENTITY_NOT_FOUND');
+		});
+	});
+
+	describe('MISSING_PARAMETERS', () => {
+		it('REGISTRAR_EVENTO sem tipo retorna MISSING_PARAMETERS', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('MISSING_PARAMETERS');
+			if (result.type === 'MISSING_PARAMETERS') {
+				expect(result.missing).toContain('tipo');
+			}
+		});
+
+		it('REGISTRAR_EVENTO sem referência ao lead retorna MISSING_PARAMETERS', async () => {
+			const deps = makeDeps();
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { tipo: 'VENDA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('MISSING_PARAMETERS');
+			if (result.type === 'MISSING_PARAMETERS') {
+				expect(result.missing).toContain('leadId, telefone ou leadRef');
+			}
+		});
+
+		it('REGISTRAR_EVENTO com tipo, leadRef e data não retorna MISSING_PARAMETERS', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findByName: vi.fn().mockResolvedValue([{ id: 'lead-1', nome: 'João', telefone: '16999999999' }]),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadRef: 'João', tipo: 'AGENDAMENTO', data: '2026-08-28T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).not.toBe('MISSING_PARAMETERS');
 		});
 	});
 
