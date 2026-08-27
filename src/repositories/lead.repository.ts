@@ -66,6 +66,14 @@ export async function countByStatus(): Promise<LeadsPorStatus[]> {
 	}));
 }
 
+export async function findByName(nome: string): Promise<Lead[]> {
+	const escaped = nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const docs = await LeadModel.find({
+		nome: { $regex: new RegExp(`^${escaped}$`, 'i') },
+	}).lean();
+	return docs.map(toLeadDTO);
+}
+
 export async function deleteById(id: string): Promise<boolean> {
 	if (!id.match(/^[0-9a-fA-F]{24}$/)) return false;
 	const result = await LeadModel.findByIdAndDelete(id);

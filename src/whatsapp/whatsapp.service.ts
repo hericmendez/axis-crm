@@ -6,6 +6,13 @@ import * as sendRateLimiter from './send-rate-limiter.js';
 import { getEnv } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import * as conversaService from '../services/conversa.service.js';
+import * as leadService from '../services/lead.service.js';
+import * as eventoService from '../services/evento.service.js';
+import * as metricasService from '../services/metricas.service.js';
+import * as leadRepository from '../repositories/lead.repository.js';
+import { createOrchestrator, type Orchestrator } from '../ai/orchestrator.js';
+import { buildResponse } from '../ai/response-builder.js';
+import { createLLMProvider } from '../ai/llm.factory.js';
 
 export type WhatsAppStatus = 'desconectado' | 'aguardando_qr' | 'conectando' | 'conectado';
 
@@ -15,6 +22,22 @@ const state = {
 };
 
 let client: WhatsAppClient | undefined;
+let orchestratorInstance: Orchestrator | undefined;
+
+export function initOrchestrator(): void {
+	const llmProvider = createLLMProvider();
+	orchestratorInstance = createOrchestrator({
+		llmProvider,
+		getRecentMessages: conversaService.getRecentMessages,
+		intentRouterDeps: {
+			leadService,
+			eventoService,
+			metricasService,
+			leadRepository,
+		},
+	});
+	logger.info('AI Orchestrator inicializado');
+}
 
 export function getStatus(): { status: WhatsAppStatus; qr: string | undefined } {
 	return { ...state };
@@ -87,9 +110,24 @@ export async function handleIncomingMessage(
 	const conversa = await conversaService.getOrCreate('whatsapp', msg.chatId);
 	await conversaService.appendMessage(conversa.id, { papel: 'usuario', conteudo: msg.body });
 
-	// TODO Fase 3 (etapa 3): encaminhar para o AI Orchestrator
 	logger.info(
 		{ chatId: msg.chatId, de: senderName, conversaId: conversa.id, texto: msg.body.slice(0, 100) },
 		'Mensagem aceita e persistida na conversa',
 	);
+
+	if (!orchestratorInstance) {
+		logger.warn({ chatId: msg.chatId }, 'Orchestrator não inicializado; mensagem ignorada');
+		return;
+	}
+
+	const result = await orchestratorInstance.processMessage(conversa.id, msg.body);
+	const responseText = buildResponse(result);
+
+	await conversaService.appendMessage(conversa.id, { papel: 'axis', conteudo: responseText });
+
+	try {
+		await sendMessage(msg.chatId, responseText);
+	} catch (err) {
+		logger.error({ chatId: msg.chatId, err }, 'Falha ao enviar resposta via WhatsApp');
+	}
 }

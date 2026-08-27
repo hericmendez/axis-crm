@@ -59,7 +59,7 @@ export async function start(): Promise<void> {
 	client.on('message_create', async (msg: Message) => {
 		try {
 			const chatId = msg.id.remote || msg.to;
-			whatsappService.handleIncomingMessage(
+			await whatsappService.handleIncomingMessage(
 				{
 					fromMe: msg.fromMe,
 					// Com endereçamento LID o chat de grupo pode não terminar em @g.us;

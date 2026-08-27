@@ -3,6 +3,7 @@ import { logger } from './utils/logger.js';
 import { createApp } from './app.js';
 import { connectMongo, disconnectMongo } from './infra/mongo/mongo.connection.js';
 import * as whatsappAdapter from './whatsapp/whatsapp.adapter.js';
+import * as whatsappService from './whatsapp/whatsapp.service.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -13,6 +14,7 @@ function main(): void {
 	connectMongo(env.MONGO_URI)
 		.then(() => {
 			logger.info('Conectado ao MongoDB');
+			whatsappService.initOrchestrator();
 			const server = app.listen(env.PORT, () => {
 				logger.info(`Servidor escutando na porta ${env.PORT}`);
 				if (env.WHATSAPP_ENABLED) {
