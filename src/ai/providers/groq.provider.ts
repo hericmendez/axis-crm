@@ -51,7 +51,7 @@ export async function complete(
 	request: CompletionRequest,
 ): Promise<StructuredOutput> {
 	const messages: ChatMessage[] = [
-		{ role: 'system', content: SYSTEM_PROMPT },
+		{ role: 'system', content: request.systemPrompt ?? SYSTEM_PROMPT },
 		...request.messages,
 	];
 

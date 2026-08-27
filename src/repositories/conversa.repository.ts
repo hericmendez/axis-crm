@@ -52,3 +52,23 @@ export async function associateLead(id: string, leadId: string): Promise<Convers
 	).lean();
 	return doc ? toConversaDTO(doc) : null;
 }
+
+export async function updateSummary(
+	id: string,
+	summary: string,
+	summaryMessageCount: number,
+): Promise<Conversa | null> {
+	if (!OBJECT_ID_RE.test(id)) return null;
+	const doc = await ConversaModel.findByIdAndUpdate(
+		id,
+		{
+			$set: {
+				summary,
+				summaryMessageCount,
+				summaryUpdatedAt: new Date(),
+			},
+		},
+		{ new: true },
+	).lean();
+	return doc ? toConversaDTO(doc) : null;
+}

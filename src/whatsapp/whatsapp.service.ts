@@ -13,6 +13,11 @@ import * as leadRepository from '../repositories/lead.repository.js';
 import { createOrchestrator, type Orchestrator } from '../ai/orchestrator.js';
 import { buildResponse } from '../ai/response-builder.js';
 import { createLLMProvider } from '../ai/llm.factory.js';
+import { summarizeConversation } from '../ai/summarizer.js';
+import { createCreateLeadTool } from '../ai/tools/create-lead.tool.js';
+import { createUpdateLeadTool } from '../ai/tools/update-lead.tool.js';
+import { createRegisterEventTool } from '../ai/tools/register-event.tool.js';
+import { createConsultAgendaTool } from '../ai/tools/consult-agenda.tool.js';
 
 export type WhatsAppStatus = 'desconectado' | 'aguardando_qr' | 'conectando' | 'conectado';
 
@@ -21,19 +26,26 @@ const state = {
 	qr: undefined as string | undefined,
 };
 
-let client: WhatsAppClient | undefined;
+	let client: WhatsAppClient | undefined;
 let orchestratorInstance: Orchestrator | undefined;
+const summarizingInFlight = new Set<string>();
 
 export function initOrchestrator(): void {
 	const llmProvider = createLLMProvider();
 	orchestratorInstance = createOrchestrator({
 		llmProvider,
-		getRecentMessages: conversaService.getRecentMessages,
+		getConversationContext: conversaService.getConversationContext,
 		intentRouterDeps: {
 			leadService,
 			eventoService,
 			metricasService,
 			leadRepository,
+			tools: {
+				createLead: createCreateLeadTool({ leadService }),
+				updateLead: createUpdateLeadTool({ leadService }),
+				registerEvent: createRegisterEventTool({ eventoService }),
+				consultAgenda: createConsultAgendaTool({ metricasService }),
+			},
 		},
 	});
 	logger.info('AI Orchestrator inicializado');
@@ -129,5 +141,42 @@ export async function handleIncomingMessage(
 		await sendMessage(msg.chatId, responseText);
 	} catch (err) {
 		logger.error({ chatId: msg.chatId, err }, 'Falha ao enviar resposta via WhatsApp');
+	}
+
+	void tryUpdateSummary(conversa.id);
+}
+
+async function tryUpdateSummary(conversaId: string): Promise<void> {
+	if (summarizingInFlight.has(conversaId)) {
+		return;
+	}
+	summarizingInFlight.add(conversaId);
+	try {
+		const conversa = await conversaService.get(conversaId);
+		if (!conversaService.shouldUpdateSummary(conversa)) {
+			return;
+		}
+
+		const llmProvider = createLLMProvider();
+		const deltaMessages = conversa.summaryMessageCount
+			? conversa.mensagens.slice(conversa.summaryMessageCount)
+			: conversa.mensagens;
+		const result = await summarizeConversation(
+			llmProvider,
+			deltaMessages,
+			conversa.summary,
+		);
+
+		if (result.type === 'LLM_ERROR') {
+			logger.warn({ conversaId, error: result.message }, 'Falha ao gerar summary; preservando anterior');
+			return;
+		}
+
+		await conversaService.updateSummary(conversaId, result.summary, conversa.mensagens.length);
+		logger.info({ conversaId, messageCount: conversa.mensagens.length }, 'Summary atualizado');
+	} catch (err) {
+		logger.error({ err, conversaId }, 'Falha ao atualizar summary; preservando anterior');
+	} finally {
+		summarizingInFlight.delete(conversaId);
 	}
 }

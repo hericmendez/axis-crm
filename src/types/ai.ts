@@ -43,6 +43,7 @@ export interface ChatMessage {
 
 export interface CompletionRequest {
 	messages: ChatMessage[];
+	systemPrompt?: string;
 }
 
 export interface LLMProvider {

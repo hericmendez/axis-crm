@@ -13,12 +13,20 @@ export interface MensagemConversa {
 	criadoEm: Date;
 }
 
+export interface ConversationContext {
+	summary?: string;
+	recentMessages: MensagemConversa[];
+}
+
 export interface Conversa {
 	id: string;
 	canal: ConversaCanal;
 	chatIdExterno: string;
 	leadId?: string;
 	mensagens: MensagemConversa[];
+	summary?: string;
+	summaryUpdatedAt?: Date;
+	summaryMessageCount?: number;
 	createdAt: Date;
 	updatedAt: Date;
 }

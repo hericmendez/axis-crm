@@ -1,25 +1,36 @@
 import type { LLMProvider, ChatMessage, StructuredOutput } from '../types/ai.js';
 import { structuredOutputSchema } from '../types/ai.js';
-import type { MensagemConversa } from '../types/conversa.js';
+import type { ConversationContext } from '../types/conversa.js';
 import { routeIntent, type IntentRouterDeps } from './intent-router.js';
 import type { OrchestratorResult } from './errors.js';
 import { logger } from '../utils/logger.js';
 
-const CONTEXT_LIMIT = 10;
-
 export interface OrchestratorDeps {
 	llmProvider: LLMProvider;
-	getRecentMessages: (conversaId: string, limit?: number) => Promise<MensagemConversa[]>;
+	getConversationContext: (conversaId: string) => Promise<ConversationContext>;
 	intentRouterDeps: IntentRouterDeps;
 }
 
-function toChatMessages(messages: MensagemConversa[], userMessage: string): ChatMessage[] {
-	const history: ChatMessage[] = messages.map((m) => ({
-		role: m.papel === 'axis' ? 'assistant' : 'user',
-		content: m.conteudo,
-	}));
-	history.push({ role: 'user', content: userMessage });
-	return history;
+function toChatMessages(context: ConversationContext, userMessage: string): ChatMessage[] {
+	const chatMessages: ChatMessage[] = [];
+
+	if (context.summary) {
+		chatMessages.push({
+			role: 'system',
+			content: `Resumo da conversa até o momento:\n${context.summary}`,
+		});
+	}
+
+	const priorMessages = context.recentMessages.slice(0, -1);
+	for (const m of priorMessages) {
+		chatMessages.push({
+			role: m.papel === 'axis' ? 'assistant' : 'user',
+			content: m.conteudo,
+		});
+	}
+
+	chatMessages.push({ role: 'user', content: userMessage });
+	return chatMessages;
 }
 
 export interface Orchestrator {
@@ -31,18 +42,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 		conversaId: string,
 		userMessage: string,
 	): Promise<OrchestratorResult> {
-		let recentMessages: MensagemConversa[];
+		let context: ConversationContext;
 		try {
-			recentMessages = await deps.getRecentMessages(conversaId, CONTEXT_LIMIT);
+			context = await deps.getConversationContext(conversaId);
 		} catch (err) {
-			logger.error({ err, conversaId }, 'Falha ao buscar mensagens da conversa');
+			logger.error({ err, conversaId }, 'Falha ao buscar contexto da conversa');
 			return {
 				type: 'INFRASTRUCTURE_ERROR',
 				message: 'Erro ao acessar histórico da conversa.',
 			};
 		}
 
-		const chatMessages = toChatMessages(recentMessages, userMessage);
+		const chatMessages = toChatMessages(context, userMessage);
 
 		let output: StructuredOutput;
 		try {

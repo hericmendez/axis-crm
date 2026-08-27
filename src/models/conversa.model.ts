@@ -20,6 +20,9 @@ const conversaSchema = new Schema(
 		chatIdExterno: { type: String, required: true, trim: true },
 		leadId: { type: Schema.Types.ObjectId, ref: 'Lead' },
 		mensagens: { type: [mensagemSchema], default: [] },
+		summary: { type: String },
+		summaryUpdatedAt: { type: Date },
+		summaryMessageCount: { type: Number },
 	},
 	{ timestamps: true },
 );
@@ -38,17 +41,23 @@ function toMensagemDTO(doc: Record<string, unknown>): MensagemConversa {
 
 export function toConversaDTO(doc: Record<string, unknown>): Conversa {
 	const raw = typeof doc.toObject === 'function' ? (doc.toObject() as Record<string, unknown>) : doc;
-	const { _id, __v: _v, mensagens, leadId, ...rest } = raw as {
+	const { _id, __v: _v, mensagens, leadId, summary, summaryUpdatedAt, summaryMessageCount, ...rest } = raw as {
 		_id: unknown;
 		__v?: unknown;
 		mensagens?: Record<string, unknown>[];
 		leadId?: unknown;
+		summary?: string;
+		summaryUpdatedAt?: Date;
+		summaryMessageCount?: number;
 	};
 	return {
 		id: String(_id),
 		...(leadId ? { leadId: String(leadId) } : {}),
 		mensagens: (mensagens ?? []).map(toMensagemDTO),
-		...(rest as Omit<Conversa, 'id' | 'mensagens' | 'leadId'>),
+		...(summary ? { summary } : {}),
+		...(summaryUpdatedAt ? { summaryUpdatedAt } : {}),
+		...(summaryMessageCount != null ? { summaryMessageCount } : {}),
+		...(rest as Omit<Conversa, 'id' | 'mensagens' | 'leadId' | 'summary' | 'summaryUpdatedAt' | 'summaryMessageCount'>),
 	};
 }
 

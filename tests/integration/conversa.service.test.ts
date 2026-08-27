@@ -162,4 +162,103 @@ describe('ConversationService', () => {
 			});
 		});
 	});
+
+	describe('getConversationContext', () => {
+		it('retorna summary undefined e mensagens para conversa sem summary', async () => {
+			const id = await criarConversaDeTeste();
+			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'Olá' });
+
+			const context = await conversaService.getConversationContext(id);
+			expect(context.summary).toBeUndefined();
+			expect(context.recentMessages).toHaveLength(1);
+			expect(context.recentMessages[0].conteudo).toBe('Olá');
+		});
+
+		it('retorna summary existente junto com mensagens recentes', async () => {
+			const id = await criarConversaDeTeste();
+			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'Olá' });
+			await conversaService.updateSummary(id, 'Resumo da conversa.', 1);
+
+			const context = await conversaService.getConversationContext(id);
+			expect(context.summary).toBe('Resumo da conversa.');
+			expect(context.recentMessages).toHaveLength(1);
+		});
+
+		it('limita mensagens recentes a 10', async () => {
+			const id = await criarConversaDeTeste();
+			for (let i = 0; i < 15; i++) {
+				await conversaService.appendMessage(id, { papel: 'usuario', conteudo: `msg-${i}` });
+			}
+
+			const context = await conversaService.getConversationContext(id);
+			expect(context.recentMessages).toHaveLength(10);
+			expect(context.recentMessages[0].conteudo).toBe('msg-5');
+			expect(context.recentMessages[9].conteudo).toBe('msg-14');
+		});
+	});
+
+	describe('shouldUpdateSummary', () => {
+		it('retorna true quando não há summary e mensagens >= 20', () => {
+			const conversa = {
+				mensagens: Array(20).fill(null),
+				summary: undefined,
+			} as never;
+			expect(conversaService.shouldUpdateSummary(conversa)).toBe(true);
+		});
+
+		it('retorna false quando não há summary e mensagens < 20', () => {
+			const conversa = {
+				mensagens: Array(10).fill(null),
+				summary: undefined,
+			} as never;
+			expect(conversaService.shouldUpdateSummary(conversa)).toBe(false);
+		});
+
+		it('retorna true quando há summary e novas mensagens >= 10 desde último summary', () => {
+			const conversa = {
+				mensagens: Array(30).fill(null),
+				summary: 'Resumo existente.',
+				summaryMessageCount: 20,
+			} as never;
+			expect(conversaService.shouldUpdateSummary(conversa)).toBe(true);
+		});
+
+		it('retorna false quando há summary e novas mensagens < 10 desde último summary', () => {
+			const conversa = {
+				mensagens: Array(25).fill(null),
+				summary: 'Resumo existente.',
+				summaryMessageCount: 20,
+			} as never;
+			expect(conversaService.shouldUpdateSummary(conversa)).toBe(false);
+		});
+	});
+
+	describe('updateSummary', () => {
+		it('persiste summary na conversa', async () => {
+			const id = await criarConversaDeTeste();
+			const conversa = await conversaService.updateSummary(id, 'Resumo teste.', 10);
+
+			expect(conversa.summary).toBe('Resumo teste.');
+			expect(conversa.summaryMessageCount).toBe(10);
+			expect(conversa.summaryUpdatedAt).toBeInstanceOf(Date);
+		});
+
+		it('retorna 404 para conversa inexistente', async () => {
+			await expect(
+				conversaService.updateSummary('0'.repeat(24), 'Resumo', 10),
+			).rejects.toMatchObject({ statusCode: 404 });
+		});
+
+		it('preserva histórico completo de mensagens', async () => {
+			const id = await criarConversaDeTeste();
+			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'msg-1' });
+			await conversaService.appendMessage(id, { papel: 'axis', conteudo: 'msg-2' });
+			await conversaService.updateSummary(id, 'Resumo.', 2);
+
+			const context = await conversaService.getConversationContext(id);
+			expect(context.recentMessages).toHaveLength(2);
+			expect(context.recentMessages[0].conteudo).toBe('msg-1');
+			expect(context.recentMessages[1].conteudo).toBe('msg-2');
+		});
+	});
 });
