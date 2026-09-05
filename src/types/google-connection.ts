@@ -5,6 +5,8 @@ export interface GoogleConnection {
 	email: string;
 	refreshToken: string;
 	scopes: string[];
+	calendarId?: string;
+	spreadsheetId?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

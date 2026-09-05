@@ -12,3 +12,5 @@ export type { GoogleAuthProvider } from './auth.js';
 export { createServiceAccountProvider, getGoogleAuth, clearAuthCache } from './auth.js';
 export { createOAuthUserProvider } from './oauth-user-auth-provider.js';
 export * as oauthService from './oauth.service.js';
+export { provision } from './provisioner.js';
+export type { ProvisionResult } from './provisioner.js';

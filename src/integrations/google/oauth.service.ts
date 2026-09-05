@@ -6,8 +6,9 @@ import { OAuthStateModel } from '../../models/oauth-state.model.js';
 import { logger } from '../../utils/logger.js';
 
 const OAUTH_SCOPES = [
-	'https://www.googleapis.com/auth/calendar',
+	'https://www.googleapis.com/auth/calendar.app.created',
 	'https://www.googleapis.com/auth/spreadsheets',
+	'https://www.googleapis.com/auth/drive.file',
 ];
 
 function getOAuth2Client() {

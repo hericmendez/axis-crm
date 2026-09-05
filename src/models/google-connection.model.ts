@@ -13,6 +13,8 @@ const googleConnectionSchema = new Schema(
 		email: { type: String, required: true, lowercase: true, trim: true },
 		refreshToken: { type: String, required: true },
 		scopes: [{ type: String }],
+		calendarId: { type: String },
+		spreadsheetId: { type: String },
 	},
 	{ timestamps: true },
 );
