@@ -5,6 +5,7 @@ import { router } from './routes/index.js';
 import { notFoundHandler } from './middlewares/not-found.middleware.js';
 import { errorHandler } from './middlewares/error-handler.middleware.js';
 import { apiKeyAuth } from './middlewares/api-key.middleware.js';
+import { resolveUser } from './middlewares/resolve-user.middleware.js';
 import { rateLimit } from './middlewares/rate-limit.middleware.js';
 import { logger } from './utils/logger.js';
 
@@ -16,6 +17,7 @@ export function createApp(): Express {
 	app.use(pinoHttp({ logger }));
 	app.use(rateLimit);
 	app.use(apiKeyAuth);
+	app.use(resolveUser);
 
 	app.use(router);
 

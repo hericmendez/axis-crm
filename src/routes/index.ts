@@ -5,10 +5,12 @@ import { eventoRouter } from './evento.routes.js';
 import { agendaRouter } from './agenda.routes.js';
 import { metricasRouter } from './metricas.routes.js';
 import { whatsappRouter } from './whatsapp.routes.js';
+import { googleOAuthRouter } from './google-oauth.routes.js';
 
 export const router = Router();
 
 router.use(healthRouter);
+router.use(googleOAuthRouter);
 router.use(leadRouter);
 router.use(eventoRouter);
 router.use(agendaRouter);

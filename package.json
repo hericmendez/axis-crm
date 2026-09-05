@@ -11,7 +11,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint src tests",
 		"format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-		"test": "vitest run",
+		"test": "vitest run --exclude '**/tests/integration/google-*.runtime.test.ts'",
+		"test:integration:google": "vitest run tests/integration/google-calendar.runtime.test.ts tests/integration/google-sheets.runtime.test.ts",
 		"perf:groq": "tsx --env-file=.env scripts/perf-groq.ts"
 	},
 	"engines": {
@@ -20,6 +21,7 @@
 	"dependencies": {
 		"dotenv": "^17.2.1",
 		"express": "^5.1.0",
+		"googleapis": "^176.0.0",
 		"helmet": "^8.3.0",
 		"mongoose": "^8.16.0",
 		"pino": "^9.7.0",
