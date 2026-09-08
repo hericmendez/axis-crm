@@ -82,6 +82,10 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 ### Não existe ainda
 
 - Fallback Ollama (provider local)
+- Leitura de agenda do Google Calendar (write-only atual)
+- Vinculação automática Conversa→Lead
+- Correção de eventos via chat (cancelamento/reagendamento)
+- Multi-usuário WhatsApp
 
 ## 5. Roadmap (docs/00-roadmap.md)
 
@@ -91,12 +95,13 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 | 1 | Domínio CRM (leads, eventos, agenda, métricas) | ✅ |
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
-| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅; faltam fallback Ollama | 🔶 parcial (etapas 1–3 + memória longa + internal tools concluídos) |
-| 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry Strategy ✅; Runtime Validation ✅; Auto-Provisioning ✅ | ✅ |
-| 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
-| 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
+| 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅ | ✅ |
+| 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry ✅; Runtime Validation ✅; Auto-Provisioning ✅ | ✅ |
+| 5 | Assistente de Agenda: Calendar Query ✅ (pendente); Agenda Avançada; Vinculação Conversa→Lead; Correção de Eventos | ⬜ |
+| 6 | API/painel: auth, endpoints admin, React separado | ⬜ |
+| 7 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Fase 4 concluída (PASSOS 1–3.8). Próximo: Fase 5 (API/painel).
+**Próximos passos imediatos:** Fase 4 concluída (Integrações Google). Próximo: Fase 5 (Assistente de Agenda).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 

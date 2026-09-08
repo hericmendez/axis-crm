@@ -31,49 +31,62 @@
 
 ## Fase 3 — IA
 
-- Ollama
-- adapter de LLM
+- adapter de LLM (Groq)
 - classificação de mensagens
 - saída estruturada
 - conversation memory
-- tool calling
+- internal tools
 - fallback conversacional
+- memória longa (summary)
 
-## Fase 4 — Integrações Google
+## Fase 4 — Integrações Google (COMPLETA)
 
-### PASSO 1 — Per-user Google OAuth
+- Per-user Google OAuth
+- Resource Provisioning automática
+- Domain Projection (Calendar + Sheets)
+- Failure & Retry Strategy
+- Runtime Validation
 
-- Google OAuth 2.0 por usuário
-- `GoogleConnection` (userId → googleSubject, email, refreshToken, scopes)
-- `OAuthState` com TTL
-- Fluxo connect/callback/disconnect/status
-- `OAuthUserAuthProvider` (token refresh automático)
+## Fase 5 — Assistente de Agenda
 
-### PASSO 2 — Google Resource Provisioning
+### Objetivo
 
-- Calendar dedicado "Axis CRM" por usuário
-- Spreadsheet dedicado "Axis CRM" por usuário
-- `calendarId` e `spreadsheetId` persistidos em `GoogleConnection`
-- Provisioning idempotente (skip se já existe)
+Transformar o Axis de um sistema que apenas **cria** eventos no Calendar em um assistente que **lê,Consulta,corrige e gerencia** a agenda do usuário.
 
-### PASSO 3 — Domain Projection
+### Problema
 
-- **3.1** Domain Model Preparation — `googleEventId`, `previousEventoId`, `userId` no Evento
-- **3.2** Calendar Projection — AGENDAMENTO → create
-- **3.3** Calendar Reschedule/Cancel — REAGENDAMENTO/DESISTENCIA/NO_SHOW → delete predecessor + create
-- **3.4** Sheets Projection — Lead create/update → append/update row
-- **3.5** Failure & Retry Strategy — idempotent create, transient DELETE retry, GET retry, failure isolation
-- **3.6** Runtime Validation — OAuth real, provisioning real, projections real, idempotência verificada
-- **3.8** Auto-Provisioning — provision() chamado automaticamente após OAuth callback
+A ferramenta `CONSULTAR_AGENDA` hoje consulta apenas o MongoDB.
+O Google Calendar é used exclusivamente como projeção (write-only).
+O assistente não consegue:
+- ler eventos existentes no Calendar
+- sugerir horários disponíveis
+- detectar conflitos
+- corrigir/agendar considerando agenda real
 
-### Arquitetura
+### PASSOs
 
-- MongoDB é fonte de verdade
-- Google Calendar e Sheets são projeções
-- Per-user OAuth fornece acesso a recursos Google do usuário
-- Falhas Google não causam rollback de transações MongoDB
+- **5.1** Calendar Query Adapter — adapter de leitura do Google Calendar
+- **5.2** Agenda Avançada — consulta combinada Calendar+MongoDB, disponível no chat
+- **5.3** Vinculação Conversa→Lead — associação automática lead↔conversa
+- **5.4** Correção de Eventos — cancelamento e reagendamento via chat
 
-## Fase 5 — API/painel
+### Princípios
+
+- MongoDB continua fonte de verdade para domínio
+- Calendar é authoritative para disponibilidade (read-through)
+- Separação entre consulta (read) e projeção (write)
+- Failure isolation mantida
+
+### Fora do escopo
+
+- Multi-usuário WhatsApp
+- Projeções assíncronas
+- Reconciliação automática
+- Fallback Ollama
+- API/painel React
+- Produção/Docker
+
+## Fase 6 — API/painel
 
 - autenticação
 - endpoints de configuração
@@ -82,7 +95,7 @@
 - integrações
 - React separado
 
-## Fase 6 — Produção
+## Fase 7 — Produção
 
 - Docker
 - VPS
@@ -98,11 +111,16 @@
 
 ### Fonte de verdade
 
-MongoDB permanece como fonte de verdade canônica.
+MongoDB permanece como fonte de verdade canônica para domínio (leads, eventos).
 
 ### Projeções
 
-Google Calendar e Google Sheets são projeções — não fontes de verdade.
+Google Calendar e Google Sheets são projeções de domínio — não fontes de verdade para dados de negócio.
+
+### Consulta de agenda
+
+Para disponibilidade e leitura de agenda, Google Calendar é authoritative.
+O assistente deve ler do Calendar quando o usuário pergunta sobre sua agenda.
 
 ### Per-user OAuth
 
@@ -112,35 +130,19 @@ Per-user OAuth fornece acesso a recursos Google proprietários por usuário.
 
 Falhas Google não causam rollback de transações MongoDB.
 
-### Confiabilidade
-
-Projeção além do modelo síncrono best-effort atual é trabalho futuro.
-
 ---
 
-## Evolução da Integração Google
-
-O roadmap original não incluía per-user Google OAuth.
-
-Durante a implementação, OAuth por usuário tornou-se necessário para suportar:
-
-- recursos Google proprietários por usuário;
-- projeções isoladas de Calendar e Spreadsheet;
-- identidade persistente de recursos Google;
-- operação multi-usuário.
-
-Portanto, per-user OAuth é agora um requisito arquitetural oficial, não uma melhoria futura opcional.
-
-### Sequência implementada
+## PASSOs Implementados
 
 ```
-PASSO 1 — Per-user Google OAuth
-PASSO 2 — Google Resource Provisioning
-PASSO 3.1 — Domain Model Preparation
-PASSO 3.2 — Calendar Projection
-PASSO 3.3 — Calendar Reschedule/Cancel Projection
-PASSO 3.4 — Sheets Projection
-PASSO 3.5 — Failure & Retry Strategy
-PASSO 3.6 — Runtime Validation
-PASSO 3.8 — Auto-Provisioning
+PASSO 1   — Per-user Google OAuth              ✅
+PASSO 2   — Google Resource Provisioning        ✅
+PASSO 3.1 — Domain Model Preparation           ✅
+PASSO 3.2 — Calendar Projection                ✅
+PASSO 3.3 — Calendar Reschedule/Cancel         ✅
+PASSO 3.4 — Sheets Projection                  ✅
+PASSO 3.5 — Failure & Retry Strategy           ✅
+PASSO 3.6 — Runtime Validation                 ✅
+PASSO 3.7 — Roadmap/Architecture Audit         ✅
+PASSO 3.8 — Auto-Provisioning                  ✅
 ```
