@@ -34,13 +34,14 @@ function toChatMessages(context: ConversationContext, userMessage: string): Chat
 }
 
 export interface Orchestrator {
-	processMessage: (conversaId: string, userMessage: string) => Promise<OrchestratorResult>;
+	processMessage: (conversaId: string, userMessage: string, userId?: string) => Promise<OrchestratorResult>;
 }
 
 export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 	async function processMessage(
 		conversaId: string,
 		userMessage: string,
+		userId?: string,
 	): Promise<OrchestratorResult> {
 		let context: ConversationContext;
 		try {
@@ -75,7 +76,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 			};
 		}
 
-		const result = await routeIntent(output, deps.intentRouterDeps, userMessage);
+		const result = await routeIntent(output, deps.intentRouterDeps, userMessage, userId);
 
 		if (result.type === 'SERVICE_ERROR') {
 			logger.error({ result, conversaId }, 'Erro de serviço ao processar intent');

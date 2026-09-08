@@ -58,7 +58,9 @@ describe('API de eventos, agenda e métricas', () => {
 
 	it('GET /api/leads/:id/eventos lista histórico ordenado', async () => {
 		const lead = await leadService.create(baseLead);
-		await request(app).post(`/api/leads/${lead.id}/eventos`).send({ tipo: 'AGENDAMENTO' });
+		await request(app)
+			.post(`/api/leads/${lead.id}/eventos`)
+			.send({ tipo: 'AGENDAMENTO', data: '2026-09-01T10:00:00Z' });
 		await request(app)
 			.post(`/api/leads/${lead.id}/eventos`)
 			.send({ tipo: 'VENDA', data: '2026-09-03T12:00:00Z' });

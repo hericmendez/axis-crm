@@ -5,8 +5,19 @@ Cada integração deve possuir adapter próprio.
 ```text
 integrations/
 ├── ollama/
-├── google-calendar/
-├── google-sheets/
+├── google/
+│   ├── auth.ts                    (Service Account + OAuth)
+│   ├── oauth.service.ts           (Per-user OAuth flow)
+│   ├── oauth-user-auth-provider.ts (OAuth token refresh)
+│   ├── provisioner.ts             (Calendar + Spreadsheet provisioning)
+│   ├── calendar/
+│   │   ├── calendar.adapter.ts
+│   │   ├── calendar.projection.ts
+│   │   └── calendar.interface.ts
+│   └── sheets/
+│       ├── sheets.adapter.ts
+│       ├── sheets.projection.ts
+│       └── sheets.interface.ts
 └── whatsapp/
 ```
 
@@ -24,6 +35,41 @@ Isso permite trocar Ollama por outro provider sem reescrever o domínio.
 
 ## Google
 
-Calendar e Sheets devem ser services/adapters independentes.
+Calendar e Sheets são services/adapters independentes.
 
 Credenciais nunca devem ficar no código ou no Git.
+
+### Per-user OAuth
+
+Cada usuário autentica individualmente via Google OAuth 2.0.
+
+`GoogleConnection` persiste:
+- `userId` → `googleSubject`, `email`, `refreshToken`, `scopes`
+- `calendarId` (Calendar dedicado)
+- `spreadsheetId` (Spreadsheet dedicado)
+
+### Resource Provisioning
+
+Após OAuth, Calendar "Axis CRM" e Spreadsheet "Axis CRM" são criados automaticamente.
+
+Provisioning é idempotente — skip se já existe.
+
+### Domain Projection
+
+MongoDB é fonte de verdade. Google Calendar e Sheets são projeções.
+
+```
+Domain Service (MongoDB commit)
+    ↓
+Projection Layer (try/catch)
+    ↓
+Google Calendar / Sheets
+    ↓
+Failure → log, não propaga
+```
+
+### Failure Isolation
+
+Falhas Google não causam rollback de transações MongoDB.
+
+Retry controlado apenas para erros transitórios (429, 408, 5xx, network).

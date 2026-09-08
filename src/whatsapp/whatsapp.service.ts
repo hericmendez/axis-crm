@@ -132,7 +132,7 @@ export async function handleIncomingMessage(
 		return;
 	}
 
-	const result = await orchestratorInstance.processMessage(conversa.id, msg.body);
+	const result = await orchestratorInstance.processMessage(conversa.id, msg.body, env.AXIS_USER_ID);
 	const responseText = buildResponse(result);
 
 	await conversaService.appendMessage(conversa.id, { papel: 'axis', conteudo: responseText });

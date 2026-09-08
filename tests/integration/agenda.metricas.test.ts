@@ -67,6 +67,7 @@ describe('eventos: efeitos no lead e imutabilidade', () => {
 
 	it('DESISTENCIA define status PERDIDO', async () => {
 		const lead = await leadService.create(baseLead);
+		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO' });
 		await eventoService.create({ leadId: lead.id, tipo: 'DESISTENCIA' });
 
 		const updated = await leadService.getById(lead.id);
@@ -75,6 +76,7 @@ describe('eventos: efeitos no lead e imutabilidade', () => {
 
 	it('NO_SHOW define status NO_SHOW', async () => {
 		const lead = await leadService.create(baseLead);
+		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO' });
 		await eventoService.create({ leadId: lead.id, tipo: 'NO_SHOW' });
 
 		const updated = await leadService.getById(lead.id);
@@ -133,8 +135,18 @@ describe('métricas e agenda', () => {
 		const lead = await leadService.create(baseLead);
 		await eventoService.create({
 			leadId: lead.id,
+			tipo: 'AGENDAMENTO',
+			data: new Date('2026-09-01T09:00:00Z'),
+		});
+		await eventoService.create({
+			leadId: lead.id,
 			tipo: 'VENDA',
 			data: new Date('2026-09-01T10:00:00Z'),
+		});
+		await eventoService.create({
+			leadId: lead.id,
+			tipo: 'AGENDAMENTO',
+			data: new Date('2026-09-02T09:00:00Z'),
 		});
 		await eventoService.create({
 			leadId: lead.id,
@@ -144,13 +156,13 @@ describe('métricas e agenda', () => {
 
 		const dentro = await metricasService.eventosPorTipo({
 			de: new Date('2026-09-01T10:00:00Z'),
-			ate: new Date('2026-09-02T10:00:00Z'),
+			ate: new Date('2026-09-01T11:00:00Z'),
 		});
 		expect(dentro).toEqual([{ tipo: 'VENDA', total: 1 }]);
 
 		const fora = await metricasService.eventosPorTipo({
 			de: new Date('2026-09-02T10:00:00Z'),
-			ate: new Date('2026-09-03T10:00:00Z'),
+			ate: new Date('2026-09-02T11:00:00Z'),
 		});
 		expect(fora).toEqual([{ tipo: 'NO_SHOW', total: 1 }]);
 	});

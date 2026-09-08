@@ -9,6 +9,8 @@ import type {
 import { AppError } from '../utils/errors.js';
 import { normalizeTelefone } from '../utils/telefone.js';
 import * as leadRepository from '../repositories/lead.repository.js';
+import { sheetsProjection } from '../integrations/google/sheets/sheets.projection.js';
+import { logger } from '../utils/logger.js';
 
 const DUPLICATE_KEY_CODE = 11000;
 
@@ -35,7 +37,7 @@ function assertConsistentVenda(status: LeadStatus | undefined, dataConversao?: D
 	}
 }
 
-export async function create(rawInput: CreateLeadInput): Promise<Lead> {
+export async function create(rawInput: CreateLeadInput, userId?: string): Promise<Lead> {
 	const input = withNormalizedTelefone(rawInput);
 	assertConsistentVenda(input.status, input.dataConversao);
 
@@ -49,14 +51,28 @@ export async function create(rawInput: CreateLeadInput): Promise<Lead> {
 		throw new AppError(409, 'Já existe um lead com este telefone');
 	}
 
+	let lead: Lead;
 	try {
-		return await leadRepository.create(finalInput);
+		lead = await leadRepository.create(finalInput);
 	} catch (err) {
 		if (isDuplicateKeyError(err)) {
 			throw new AppError(409, 'Já existe um lead com este telefone');
 		}
 		throw err;
 	}
+
+	if (userId) {
+		try {
+			await sheetsProjection({ userId, lead });
+		} catch (err) {
+			logger.error(
+				{ err, leadId: lead.id, userId, operation: 'sheetsProjection' },
+				'Sheets projection failed, domain result preserved',
+			);
+		}
+	}
+
+	return lead;
 }
 
 export async function getById(id: string): Promise<Lead> {
@@ -74,7 +90,7 @@ export async function list(
 	return leadRepository.find(filter, pagination);
 }
 
-export async function update(id: string, patch: UpdateLeadInput): Promise<Lead> {
+export async function update(id: string, patch: UpdateLeadInput, userId?: string): Promise<Lead> {
 	const existing = await getById(id);
 	const effectiveStatus = patch.status ?? existing.status;
 
@@ -98,6 +114,18 @@ export async function update(id: string, patch: UpdateLeadInput): Promise<Lead> 
 	if (!updated) {
 		throw new AppError(404, 'Lead não encontrado');
 	}
+
+	if (userId) {
+		try {
+			await sheetsProjection({ userId, lead: updated });
+		} catch (err) {
+			logger.error(
+				{ err, leadId: updated.id, userId, operation: 'sheetsProjection' },
+				'Sheets projection failed, domain result preserved',
+			);
+		}
+	}
+
 	return updated;
 }
 

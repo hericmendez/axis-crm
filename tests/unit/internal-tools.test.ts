@@ -33,7 +33,7 @@ describe('CreateLeadTool', () => {
 			nome: 'João',
 			telefone: '16999999999',
 			contatoOrigem: 'whatsapp',
-		});
+		}, undefined);
 	});
 
 	it('passa status quando fornecido', async () => {
@@ -56,7 +56,7 @@ describe('CreateLeadTool', () => {
 			telefone: '16999999999',
 			contatoOrigem: 'whatsapp',
 			status: 'CLIENTE',
-		});
+		}, undefined);
 	});
 
 	it('propaga erro do service', async () => {
@@ -89,7 +89,7 @@ describe('UpdateLeadTool', () => {
 
 		expect(result.type).toBe('SUCCESS');
 		expect(result.message).toContain('Lead atualizado');
-		expect(leadService.update).toHaveBeenCalledWith('lead-1', { status: 'VENDIDO' });
+		expect(leadService.update).toHaveBeenCalledWith('lead-1', { status: 'VENDIDO' }, undefined);
 	});
 
 	it('propaga erro do service', async () => {

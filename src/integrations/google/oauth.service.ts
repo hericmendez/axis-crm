@@ -3,12 +3,15 @@ import crypto from 'node:crypto';
 import { getEnv } from '../../config/env.js';
 import { GoogleConnectionModel } from '../../models/google-connection.model.js';
 import { OAuthStateModel } from '../../models/oauth-state.model.js';
+import { AppError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 
 const OAUTH_SCOPES = [
 	'https://www.googleapis.com/auth/calendar.app.created',
 	'https://www.googleapis.com/auth/spreadsheets',
 	'https://www.googleapis.com/auth/drive.file',
+	'https://www.googleapis.com/auth/userinfo.email',
+	'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
 function getOAuth2Client() {
@@ -23,14 +26,13 @@ function getOAuth2Client() {
 	);
 }
 
-export function generateAuthorizationUrl(userId: string): string {
+export async function generateAuthorizationUrl(userId: string): Promise<string> {
 	const oauth2Client = getOAuth2Client();
 	const state = crypto.randomBytes(32).toString('hex');
 
-	OAuthStateModel.create({
+	await OAuthStateModel.create({
 		state,
 		userId,
-		expiresAt: new Date(Date.now() + 10 * 60 * 1000),
 	});
 
 	const url = oauth2Client.generateAuthUrl({
@@ -50,18 +52,17 @@ export async function handleCallback(code: string, state: string): Promise<{ use
 		throw new AppError(400, 'Invalid or expired OAuth state');
 	}
 
-	if (new Date() > oauthState.expiresAt) {
-		throw new AppError(400, 'OAuth state expired');
-	}
-
 	const userId = String(oauthState.userId);
 	const oauth2Client = getOAuth2Client();
 
 	const { tokens } = await oauth2Client.getToken(code);
 	oauth2Client.setCredentials(tokens);
 
-	const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-	const { data: userInfo } = await oauth2.userinfo.get();
+	const userInfoRes = await oauth2Client.request({
+		url: 'https://www.googleapis.com/oauth2/v2/userinfo',
+		headers: { Authorization: `Bearer ${tokens.access_token}` },
+	});
+	const userInfo = userInfoRes.data as { id: string; email: string };
 
 	if (!userInfo.id || !userInfo.email) {
 		throw new AppError(500, 'Failed to retrieve Google user info');
@@ -94,14 +95,4 @@ export async function disconnectUser(userId: string): Promise<void> {
 
 export async function getConnection(userId: string) {
 	return GoogleConnectionModel.findOne({ userId }).lean();
-}
-
-class AppError extends Error {
-	constructor(
-		public readonly statusCode: number,
-		message: string,
-	) {
-		super(message);
-		this.name = 'AppError';
-	}
 }

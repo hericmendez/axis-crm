@@ -4,6 +4,25 @@ import type { ICalendarAdapter } from './calendar.interface.js';
 import type { CalendarEvent, CalendarEventResult } from './calendar.types.js';
 import { logger } from '../../../utils/logger.js';
 
+const BASE32HEX_CHARS = '0123456789abcdefghijklmnopqrstuv';
+
+function toBase32Hex(hex: string): string {
+	let bits = '';
+	for (const c of hex) {
+		bits += parseInt(c, 16).toString(2).padStart(4, '0');
+	}
+	while (bits.length % 5 !== 0) bits += '0';
+	let result = '';
+	for (let i = 0; i < bits.length; i += 5) {
+		result += BASE32HEX_CHARS[Number.parseInt(bits.substring(i, i + 5), 2)];
+	}
+	return result;
+}
+
+export function eventoIdToGoogleEventId(eventoId: string): string {
+	return toBase32Hex(eventoId);
+}
+
 export class GoogleCalendarAdapter implements ICalendarAdapter {
 	private provider: GoogleAuthProvider;
 	private calendarId: string;
@@ -24,6 +43,7 @@ export class GoogleCalendarAdapter implements ICalendarAdapter {
 			const response = await calendar.events.insert({
 				calendarId: this.calendarId,
 				requestBody: {
+					...(event.id ? { id: event.id } : {}),
 					summary: event.summary,
 					description: event.description,
 					start: {

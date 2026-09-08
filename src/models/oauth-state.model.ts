@@ -1,7 +1,7 @@
 import { Schema, model } from 'mongoose';
 import type { OAuthState } from '../types/google-oauth.js';
 
-const OAUTH_STATE_TTL_MINUTES = 10;
+const OAUTH_STATE_TTL_MINUTES = 30;
 
 const oauthStateSchema = new Schema({
 	state: { type: String, required: true, unique: true, index: true },

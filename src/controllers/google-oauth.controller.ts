@@ -4,13 +4,13 @@ import { AppError } from '../utils/errors.js';
 
 type AuthRequest = Request & { userId: string };
 
-export function connect(req: Request, res: Response): void {
+export async function connect(req: Request, res: Response): Promise<void> {
 	const userId = (req as AuthRequest).userId;
 	if (!userId) {
 		throw new AppError(401, 'Authentication required');
 	}
 
-	const url = oauthService.generateAuthorizationUrl(userId);
+	const url = await oauthService.generateAuthorizationUrl(userId);
 	res.json({ url });
 }
 

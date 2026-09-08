@@ -3,6 +3,11 @@ export interface SheetsAppendResult {
 	updatedRows?: number;
 }
 
+export interface SheetsUpdateResult {
+	updatedCells?: number;
+	updatedRows?: number;
+}
+
 export interface SheetsRow {
 	values: unknown[][];
 }

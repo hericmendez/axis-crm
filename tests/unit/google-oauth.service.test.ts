@@ -14,6 +14,9 @@ vi.mock('googleapis', () => {
 		tokens: { refresh_token: 'mock-refresh-token', access_token: 'mock-access-token' },
 	});
 	const mockSetCredentials = vi.fn();
+	const mockRequest = vi.fn().mockResolvedValue({
+		data: { id: 'google-sub-123', email: 'user@gmail.com' },
+	});
 	return {
 		google: {
 			auth: {
@@ -21,15 +24,9 @@ vi.mock('googleapis', () => {
 					generateAuthUrl: mockGenerateAuthUrl,
 					getToken: mockGetToken,
 					setCredentials: mockSetCredentials,
+					request: mockRequest,
 				})),
 			},
-			oauth2: vi.fn().mockReturnValue({
-				userinfo: {
-					get: vi.fn().mockResolvedValue({
-						data: { id: 'google-sub-123', email: 'user@gmail.com' },
-					}),
-				},
-			}),
 		},
 	};
 });
@@ -67,8 +64,8 @@ describe('GoogleOAuthService', () => {
 	});
 
 	describe('generateAuthorizationUrl', () => {
-		it('generates a URL with correct parameters', () => {
-			const url = generateAuthorizationUrl('user-123');
+		it('generates a URL with correct parameters', async () => {
+			const url = await generateAuthorizationUrl('user-123');
 			expect(url).toContain('https://accounts.google.com/o/oauth2/auth');
 			expect(OAuthStateModel.create).toHaveBeenCalledWith(
 				expect.objectContaining({
@@ -77,13 +74,41 @@ describe('GoogleOAuthService', () => {
 			);
 		});
 
-		it('creates a state entry in MongoDB', () => {
-			generateAuthorizationUrl('user-456');
+		it('creates a state entry in MongoDB', async () => {
+			await generateAuthorizationUrl('user-456');
 			expect(OAuthStateModel.create).toHaveBeenCalledTimes(1);
 			const call = vi.mocked(OAuthStateModel.create).mock.calls[0][0] as Record<string, unknown>;
 			expect(call.state).toBeDefined();
 			expect(typeof call.state).toBe('string');
 			expect((call.state as string).length).toBe(64);
+		});
+
+		it('awaits OAuthStateModel.create before returning URL', async () => {
+			const createOrder: string[] = [];
+			vi.mocked(OAuthStateModel.create).mockImplementationOnce(async () => {
+				createOrder.push('create');
+				return {} as never;
+			});
+
+			const mockGenerateAuthUrl = vi.fn().mockImplementation(() => {
+				createOrder.push('generateAuthUrl');
+				return 'https://accounts.google.com/o/oauth2/auth?mock=true';
+			});
+
+			const { google } = await import('googleapis');
+			vi.mocked(google.auth.OAuth2).mockImplementationOnce(() => ({
+				generateAuthUrl: mockGenerateAuthUrl,
+				getToken: vi.fn(),
+				setCredentials: vi.fn(),
+			} as never));
+
+			await generateAuthorizationUrl('user-789');
+			expect(createOrder).toEqual(['create', 'generateAuthUrl']);
+		});
+
+		it('rejects when OAuthStateModel.create fails', async () => {
+			vi.mocked(OAuthStateModel.create).mockRejectedValueOnce(new Error('DB write failed'));
+			await expect(generateAuthorizationUrl('user-err')).rejects.toThrow('DB write failed');
 		});
 	});
 
@@ -98,6 +123,10 @@ describe('GoogleOAuthService', () => {
 					googleSubject: 'google-sub-123',
 					email: 'user@gmail.com',
 					refreshToken: 'mock-refresh-token',
+					scopes: expect.arrayContaining([
+						'https://www.googleapis.com/auth/calendar.app.created',
+						'https://www.googleapis.com/auth/userinfo.email',
+					]),
 				}),
 				{ upsert: true, new: true },
 			);

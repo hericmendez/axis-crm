@@ -7,6 +7,7 @@ export interface RegisterEventInput {
 	leadNome: string;
 	data?: Date;
 	observacoes?: string;
+	userId?: string;
 }
 
 export interface RegisterEventToolDeps {
@@ -28,6 +29,7 @@ export function createRegisterEventTool(deps: RegisterEventToolDeps): InternalTo
 				tipo: params.tipo,
 				...(params.data ? { data: params.data } : {}),
 				...(params.observacoes ? { observacoes: params.observacoes } : {}),
+				...(params.userId ? { userId: params.userId } : {}),
 			});
 			return {
 				type: 'SUCCESS',

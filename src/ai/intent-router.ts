@@ -18,8 +18,8 @@ export interface IntentRouterDeps {
 			telefone: string;
 			contatoOrigem: string;
 			status?: LeadStatus;
-		}) => Promise<Lead>;
-		update: (id: string, patch: Record<string, unknown>) => Promise<Lead>;
+		}, userId?: string) => Promise<Lead>;
+		update: (id: string, patch: Record<string, unknown>, userId?: string) => Promise<Lead>;
 		getById: (id: string) => Promise<Lead>;
 	};
 	eventoService: {
@@ -28,6 +28,7 @@ export interface IntentRouterDeps {
 			tipo: EventoTipo;
 			data?: Date;
 			observacoes?: string;
+			userId?: string;
 		}) => Promise<{ id: string }>;
 	};
 	metricasService: {
@@ -110,6 +111,7 @@ export async function routeIntent(
 	output: StructuredOutput,
 	deps: IntentRouterDeps,
 	userMessage?: string,
+	userId?: string,
 ): Promise<OrchestratorResult> {
 	if (output.mode === 'CHAT') {
 		return { type: 'SUCCESS', message: output.response };
@@ -137,14 +139,15 @@ export async function routeIntent(
 
 	try {
 		switch (intent) {
-			case 'CRIAR_LEAD': {
-				return await deps.tools.createLead.execute({
-					nome: params.nome as string,
-					telefone: params.telefone as string,
-					contatoOrigem: 'whatsapp',
-					...(params.status ? { status: params.status as LeadStatus } : {}),
-				});
-			}
+		case 'CRIAR_LEAD': {
+			return await deps.tools.createLead.execute({
+				nome: params.nome as string,
+				telefone: params.telefone as string,
+				contatoOrigem: 'whatsapp',
+				...(params.status ? { status: params.status as LeadStatus } : {}),
+				...(userId ? { userId } : {}),
+			});
+		}
 
 			case 'ATUALIZAR_LEAD': {
 				const resolution = await resolveLead(
@@ -185,6 +188,7 @@ export async function routeIntent(
 				return await deps.tools.updateLead.execute({
 					leadId: resolution.lead.id,
 					patch,
+					...(userId ? { userId } : {}),
 				});
 			}
 
@@ -287,6 +291,7 @@ export async function routeIntent(
 					leadNome: resolution.lead.nome,
 					...(eventData ? { data: eventData } : {}),
 					...(params.observacoes ? { observacoes: params.observacoes as string } : {}),
+					...(userId ? { userId } : {}),
 				});
 			}
 

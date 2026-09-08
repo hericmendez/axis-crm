@@ -8,6 +8,8 @@ import { AppError } from '../utils/errors.js';
 import * as leadRepository from '../repositories/lead.repository.js';
 import { logger } from '../utils/logger.js';
 import * as eventoRepository from '../repositories/evento.repository.js';
+import { calendarProjection } from '../integrations/google/calendar/calendar.projection.js';
+import { sheetsProjection } from '../integrations/google/sheets/sheets.projection.js';
 
 type LeadPatch = Parameters<typeof leadRepository.updateById>[1];
 
@@ -32,16 +34,41 @@ function buildPatch(tipo: EventoTipo, dataEvento: Date): LeadPatch {
 	}
 }
 
+const TIPOS_COM_PREDECESSOR: EventoTipo[] = ['REAGENDAMENTO', 'DESISTENCIA', 'NO_SHOW'];
+
+async function resolvePreviousEvento(
+	leadId: string,
+	tipo: EventoTipo,
+): Promise<string | undefined> {
+	if (!TIPOS_COM_PREDECESSOR.includes(tipo)) {
+		return undefined;
+	}
+
+	const activeEvento = await eventoRepository.findLastActiveForLead(leadId);
+
+	if (!activeEvento) {
+		throw new AppError(
+			400,
+			`Não há agendamento ativo para este lead. Não é possível registrar ${tipo}.`,
+		);
+	}
+
+	return activeEvento.id;
+}
+
 export async function create(input: CreateEventoInput): Promise<Evento> {
 	const lead = await leadRepository.findById(input.leadId);
 	if (!lead) {
 		throw new AppError(404, 'Lead não encontrado');
 	}
 
+	const previousEventoId = await resolvePreviousEvento(input.leadId, input.tipo);
+
 	const dataEvento = input.data ?? new Date();
 	const evento = await eventoRepository.create({
 		...input,
 		data: dataEvento,
+		...(previousEventoId ? { previousEventoId } : {}),
 	});
 
 	const patch = buildPatch(evento.tipo, dataEvento);
@@ -56,6 +83,40 @@ export async function create(input: CreateEventoInput): Promise<Evento> {
 	}
 
 	logger.info({ eventoId: evento.id, tipo: evento.tipo, leadId: input.leadId }, 'Evento registrado');
+
+	try {
+		let previousEvento: Evento | null = null;
+		if (evento.previousEventoId) {
+			previousEvento = await eventoRepository.findById(evento.previousEventoId);
+		}
+
+		await calendarProjection({
+			userId: input.userId ?? '',
+			evento,
+			lead,
+			previousEvento,
+		});
+	} catch (err) {
+		logger.error(
+			{ err, eventoId: evento.id, leadId: input.leadId, userId: input.userId, tipo: evento.tipo, operation: 'calendarProjection' },
+			'Calendar projection failed, domain result preserved',
+		);
+	}
+
+	if (input.userId) {
+		try {
+			const updatedLead = await leadRepository.findById(input.leadId);
+			if (updatedLead) {
+				await sheetsProjection({ userId: input.userId, lead: updatedLead });
+			}
+		} catch (err) {
+			logger.error(
+				{ err, leadId: input.leadId, userId: input.userId, operation: 'sheetsProjection' },
+				'Sheets projection failed, domain result preserved',
+			);
+		}
+	}
+
 	return evento;
 }
 

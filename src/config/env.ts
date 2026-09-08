@@ -18,6 +18,7 @@ const envSchema = z
 		WHATSAPP_ALLOWED_GROUPS: z.string().optional(),
 		AXIS_NUMBER: z.string().optional(),
 		WHATSAPP_SELF_LID: z.string().optional(),
+		AXIS_USER_ID: z.string().optional(),
 		// Google Service Account
 		GOOGLE_CLIENT_EMAIL: z.string().optional(),
 		GOOGLE_PRIVATE_KEY: z.string().optional(),

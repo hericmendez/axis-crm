@@ -39,12 +39,37 @@
 - tool calling
 - fallback conversacional
 
-## Fase 4 — Integrações
+## Fase 4 — Integrações Google
 
-- Google Calendar
-- Google Sheets
-- credenciais por configuração
-- adapters isolados
+### PASSO 1 — Per-user Google OAuth
+
+- Google OAuth 2.0 por usuário
+- `GoogleConnection` (userId → googleSubject, email, refreshToken, scopes)
+- `OAuthState` com TTL
+- Fluxo connect/callback/disconnect/status
+- `OAuthUserAuthProvider` (token refresh automático)
+
+### PASSO 2 — Google Resource Provisioning
+
+- Calendar dedicado "Axis CRM" por usuário
+- Spreadsheet dedicado "Axis CRM" por usuário
+- `calendarId` e `spreadsheetId` persistidos em `GoogleConnection`
+- Provisioning idempotente (skip se já existe)
+
+### PASSO 3 — Domain Projection
+
+- **3.1** Domain Model Preparation — `googleEventId`, `previousEventoId`, `userId` no Evento
+- **3.2** Calendar Projection — AGENDAMENTO → create
+- **3.3** Calendar Reschedule/Cancel — REAGENDAMENTO/DESISTENCIA/NO_SHOW → delete predecessor + create
+- **3.4** Sheets Projection — Lead create/update → append/update row
+- **3.5** Failure & Retry Strategy — idempotent create, transient DELETE retry, GET retry, failure isolation
+
+### Arquitetura
+
+- MongoDB é fonte de verdade
+- Google Calendar e Sheets são projeções
+- Per-user OAuth fornece acesso a recursos Google do usuário
+- Falhas Google não causam rollback de transações MongoDB
 
 ## Fase 5 — API/painel
 
@@ -64,3 +89,55 @@
 - backups
 - segurança
 - observabilidade
+
+---
+
+## Decisões Arquiteturais — Google Integration
+
+### Fonte de verdade
+
+MongoDB permanece como fonte de verdade canônica.
+
+### Projeções
+
+Google Calendar e Google Sheets são projeções — não fontes de verdade.
+
+### Per-user OAuth
+
+Per-user OAuth fornece acesso a recursos Google proprietários por usuário.
+
+### Falhas Google
+
+Falhas Google não causam rollback de transações MongoDB.
+
+### Confiabilidade
+
+Projeção além do modelo síncrono best-effort atual é trabalho futuro.
+
+---
+
+## Evolução da Integração Google
+
+O roadmap original não incluía per-user Google OAuth.
+
+Durante a implementação, OAuth por usuário tornou-se necessário para suportar:
+
+- recursos Google proprietários por usuário;
+- projeções isoladas de Calendar e Spreadsheet;
+- identidade persistente de recursos Google;
+- operação multi-usuário.
+
+Portanto, per-user OAuth é agora um requisito arquitetural oficial, não uma melhoria futura opcional.
+
+### Sequência implementada
+
+```
+PASSO 1 — Per-user Google OAuth
+PASSO 2 — Google Resource Provisioning
+PASSO 3.1 — Domain Model Preparation
+PASSO 3.2 — Calendar Projection
+PASSO 3.3 — Calendar Reschedule/Cancel Projection
+PASSO 3.4 — Sheets Projection
+PASSO 3.5 — Failure & Retry Strategy
+PASSO 3.6 — Runtime Validation
+```

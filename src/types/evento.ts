@@ -10,6 +10,8 @@ export interface Evento {
 	tipo: EventoTipo;
 	data: Date;
 	observacoes?: string;
+	previousEventoId?: string;
+	googleEventId?: string;
 	createdAt: Date;
 }
 
@@ -18,6 +20,7 @@ export interface CreateEventoInput {
 	tipo: EventoTipo;
 	data?: Date;
 	observacoes?: string;
+	userId?: string;
 }
 
 export interface Periodo {

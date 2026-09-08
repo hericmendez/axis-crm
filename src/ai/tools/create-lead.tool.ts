@@ -6,6 +6,7 @@ export interface CreateLeadInput {
 	telefone: string;
 	contatoOrigem: string;
 	status?: LeadStatus;
+	userId?: string;
 }
 
 export interface CreateLeadToolDeps {
@@ -15,7 +16,7 @@ export interface CreateLeadToolDeps {
 			telefone: string;
 			contatoOrigem: string;
 			status?: LeadStatus;
-		}) => Promise<Lead>;
+		}, userId?: string) => Promise<Lead>;
 	};
 }
 
@@ -27,7 +28,7 @@ export function createCreateLeadTool(deps: CreateLeadToolDeps): InternalTool<Cre
 				telefone: params.telefone,
 				contatoOrigem: params.contatoOrigem,
 				...(params.status ? { status: params.status } : {}),
-			});
+			}, params.userId);
 			return {
 				type: 'SUCCESS',
 				message: `Lead criado: ${result.nome} (${result.telefone}).`,

@@ -1,10 +1,12 @@
 export type { ICalendarAdapter } from './calendar/calendar.interface.js';
 export type { CalendarEvent, CalendarEventResult } from './calendar/calendar.types.js';
 export { GoogleCalendarAdapter } from './calendar/calendar.adapter.js';
+export { calendarProjection, type CalendarProjectionInput } from './calendar/calendar.projection.js';
 
 export type { ISheetsAdapter } from './sheets/sheets.interface.js';
 export type { SheetsAppendResult, SheetsRow } from './sheets/sheets.types.js';
 export { GoogleSheetsAdapter } from './sheets/sheets.adapter.js';
+export { sheetsProjection, type SheetsProjectionInput } from './sheets/sheets.projection.js';
 
 export type { GoogleServiceAccountConfig, GoogleCalendarConfig, GoogleSheetsConfig } from './google.types.js';
 export { isGoogleConfigured, normalizePrivateKey } from './google.types.js';
