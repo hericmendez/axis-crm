@@ -5,6 +5,7 @@ import { GoogleConnectionModel } from '../../models/google-connection.model.js';
 import { OAuthStateModel } from '../../models/oauth-state.model.js';
 import { AppError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
+import { provision } from './provisioner.js';
 
 const OAUTH_SCOPES = [
 	'https://www.googleapis.com/auth/calendar.app.created',
@@ -81,6 +82,12 @@ export async function handleCallback(code: string, state: string): Promise<{ use
 		connectionData,
 		{ upsert: true, new: true },
 	);
+
+	try {
+		await provision(userId);
+	} catch (err) {
+		logger.error({ err, userId, operation: 'provision' }, 'Google resource provisioning failed after OAuth');
+	}
 
 	logger.info({ userId, email: userInfo.email }, 'Google account connected');
 	return { userId, email: userInfo.email };

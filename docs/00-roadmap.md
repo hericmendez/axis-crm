@@ -63,6 +63,8 @@
 - **3.3** Calendar Reschedule/Cancel — REAGENDAMENTO/DESISTENCIA/NO_SHOW → delete predecessor + create
 - **3.4** Sheets Projection — Lead create/update → append/update row
 - **3.5** Failure & Retry Strategy — idempotent create, transient DELETE retry, GET retry, failure isolation
+- **3.6** Runtime Validation — OAuth real, provisioning real, projections real, idempotência verificada
+- **3.8** Auto-Provisioning — provision() chamado automaticamente após OAuth callback
 
 ### Arquitetura
 
@@ -140,4 +142,5 @@ PASSO 3.3 — Calendar Reschedule/Cancel Projection
 PASSO 3.4 — Sheets Projection
 PASSO 3.5 — Failure & Retry Strategy
 PASSO 3.6 — Runtime Validation
+PASSO 3.8 — Auto-Provisioning
 ```

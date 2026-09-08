@@ -67,7 +67,7 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 - **Memória conversacional longa**: summary persistido + threshold de mensagens + Summarizer via LLMProvider
 - **Internal Tools Layer**: 4 tools (CreateLeadTool, UpdateLeadTool, RegisterEventTool, ConsultAgendaTool) encapsulando chamadas a Domain Services; Intent Router delega para tools em vez de services diretamente
 
-**Fase 4 — Google Integration (PASSOS 1–3.5):**
+**Fase 4 — Google Integration (PASSOS 1–3.8):**
 
 - **PASSO 1 — Per-user Google OAuth**: `GoogleConnection` (userId → googleSubject, email, refreshToken, scopes, calendarId, spreadsheetId), `OAuthState` com TTL, fluxo connect/callback/disconnect/status, `OAuthUserAuthProvider` (token refresh automático)
 - **PASSO 2 — Google Resource Provisioning**: Calendar "Axis CRM" e Spreadsheet "Axis CRM" criados automaticamente após OAuth; `calendarId` e `spreadsheetId` persistidos em `GoogleConnection`; provisioning idempotente
@@ -76,11 +76,12 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 - **PASSO 3.3 — Calendar Reschedule/Cancel**: REAGENDAMENTO/DESISTENCIA/NO_SHOW → delete predecessor + create; `deletePreviousEvent()` com 404-as-success; early type-check before DB lookup
 - **PASSO 3.4 — Sheets Projection**: `sheetsProjection.ts` com lead create/update → append/update row; header lazy; telefone como identidade; `findRowByTelefone()`
 - **PASSO 3.5 — Failure & Retry Strategy**: `eventoIdToGoogleEventId()` (base32hex), idempotent create via `id` field; `isTransientError()` + DELETE retry; `getRowsWithRetry()` (max 3 attempts); failure isolation (try/catch, log, não propaga)
+- **PASSO 3.6 — Runtime Validation**: 13 testes runtime contra Google APIs reais; OAuth, provisioning, Calendar projection, Sheets projection, idempotência verificadas
+- **PASSO 3.8 — Auto-Provisioning**: `provision()` chamado automaticamente após OAuth callback; provisioning failure isolation (log, não falha OAuth)
 
 ### Não existe ainda
 
 - Fallback Ollama (provider local)
-- Google Integration — Runtime validation (PASSO 3.6) — BLOCKED (requer OAuth flow via browser)
 
 ## 5. Roadmap (docs/00-roadmap.md)
 
@@ -91,11 +92,11 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 | 1.5 | Hardening de segurança (API key, helmet, rate limit, limites de payload/validação) | ✅ |
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
 | 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅; faltam fallback Ollama | 🔶 parcial (etapas 1–3 + memória longa + internal tools concluídos) |
-| 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry Strategy ✅ | ✅ |
+| 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry Strategy ✅; Runtime Validation ✅; Auto-Provisioning ✅ | ✅ |
 | 5 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 6 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Fase 4 concluída (PASSOS 1–3.5). Próximo: Fase 5 (API/painel) ou validação runtime (PASSO 3.6).
+**Próximos passos imediatos:** Fase 4 concluída (PASSOS 1–3.8). Próximo: Fase 5 (API/painel).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
@@ -333,8 +334,7 @@ Testes: typecheck, lint e **155 testes** passando.
 - [ ] Monitorar disponibilidade de modelos na Groq (nomes mudam; 404 = modelo descontinuado)
 - [x] Autenticação real do WhatsApp ✅ (2026-08-24 — ver checkpoint na seção 12)
 - [x] AI Orchestrator + intent router ✅ (2026-08-27 — ver seção 15)
-- [x] Google Integration — Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry Strategy ✅ (PASSOS 1–3.5)
-- [ ] Google Integration — Runtime validation (PASSO 3.6) — BLOCKED (requer OAuth flow via browser)
+- [x] Google Integration — Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry Strategy ✅; Runtime Validation ✅; Auto-Provisioning ✅ (PASSOS 1–3.8)
 - [ ] Memória longa (summary) quando histórico crescer
 - [ ] Tool calling nativo do LLM (adiado — ver ADR-002)
 - [ ] Adapter Ollama (fallback local)

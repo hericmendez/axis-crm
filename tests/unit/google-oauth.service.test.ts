@@ -44,6 +44,10 @@ vi.mock('../../src/models/oauth-state.model.js', () => ({
 	},
 }));
 
+vi.mock('../../src/integrations/google/provisioner.js', () => ({
+	provision: vi.fn().mockResolvedValue({ calendarId: 'cal-123', spreadsheetId: 'sheet-123' }),
+}));
+
 vi.mock('../../src/models/google-connection.model.js', () => ({
 	GoogleConnectionModel: {
 		findOneAndUpdate: vi.fn().mockResolvedValue({}),
@@ -57,6 +61,7 @@ vi.mock('../../src/models/google-connection.model.js', () => ({
 import { generateAuthorizationUrl, handleCallback, disconnectUser, getConnection } from '../../src/integrations/google/oauth.service.js';
 import { OAuthStateModel } from '../../src/models/oauth-state.model.js';
 import { GoogleConnectionModel } from '../../src/models/google-connection.model.js';
+import { provision } from '../../src/integrations/google/provisioner.js';
 
 describe('GoogleOAuthService', () => {
 	beforeEach(() => {
@@ -142,6 +147,26 @@ describe('GoogleOAuthService', () => {
 		it('consumes state (single-use)', async () => {
 			await handleCallback('auth-code', 'valid-state');
 			expect(OAuthStateModel.findOneAndDelete).toHaveBeenCalledWith({ state: 'valid-state' });
+		});
+
+		it('calls provision after persisting connection', async () => {
+			await handleCallback('auth-code', 'valid-state');
+			expect(provision).toHaveBeenCalledWith('user-id-123');
+		});
+
+		it('passes correct userId to provision', async () => {
+			await handleCallback('auth-code', 'valid-state');
+			expect(provision).toHaveBeenCalledTimes(1);
+			const call = vi.mocked(provision).mock.calls[0];
+			expect(call[0]).toBe('user-id-123');
+		});
+
+		it('succeeds even when provision fails', async () => {
+			vi.mocked(provision).mockRejectedValueOnce(new Error('Provisioning API error'));
+			const result = await handleCallback('auth-code', 'valid-state');
+			expect(result.email).toBe('user@gmail.com');
+			expect(result.userId).toBe('user-id-123');
+			expect(GoogleConnectionModel.findOneAndUpdate).toHaveBeenCalled();
 		});
 	});
 

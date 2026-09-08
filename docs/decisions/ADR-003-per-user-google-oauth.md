@@ -20,7 +20,7 @@ Durante a implementação, tornou-se necessário suportar **OAuth por usuário**
 Implementar:
 
 1. **Per-user Google OAuth** — cada usuário autentica individualmente; `GoogleConnection` persiste `refreshToken`, `calendarId`, `spreadsheetId`
-2. **Resource Provisioning** — Calendar e Spreadsheet criados automaticamente após OAuth
+2. **Resource Provisioning** — Calendar e Spreadsheet criados automaticamente após OAuth (via `provision()` chamado no `handleCallback`; falhas de provisioning são isoladas e não invalidam a conexão OAuth)
 3. **Domain Projection** — Calendar e Sheets são projeções pós-commit do MongoDB
 4. **Failure Isolation** — falhas Google não causam rollback de transações MongoDB
 
