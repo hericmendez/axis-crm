@@ -94,7 +94,7 @@ describe('CalendarProjection', () => {
 					description: expect.stringContaining('Lead: João da Silva'),
 				}),
 			);
-			expect(updateGoogleEventId).toHaveBeenCalledWith(mockAgendamento.id, 'google-event-123');
+			expect(updateGoogleEventId).toHaveBeenCalledWith(expect.any(String), mockAgendamento.id, 'google-event-123');
 		});
 
 		it('AGENDAMENTO não deleta predecessor mesmo se existir', async () => {
@@ -182,7 +182,7 @@ describe('CalendarProjection', () => {
 
 			expect(mockDeleteEvent).toHaveBeenCalledWith('old-google-event');
 			expect(mockCreateEvent).toHaveBeenCalled();
-			expect(updateGoogleEventId).toHaveBeenCalledWith(mockReagendamento.id, 'google-event-456');
+			expect(updateGoogleEventId).toHaveBeenCalledWith(expect.any(String), mockReagendamento.id, 'google-event-456');
 		});
 
 		it('não deleta predecessor sem googleEventId e cria novo evento', async () => {
@@ -227,7 +227,7 @@ describe('CalendarProjection', () => {
 
 			expect(mockDeleteEvent).not.toHaveBeenCalled();
 			expect(mockCreateEvent).toHaveBeenCalled();
-			expect(updateGoogleEventId).toHaveBeenCalledWith(mockReagendamento.id, 'google-event-456');
+			expect(updateGoogleEventId).toHaveBeenCalledWith(expect.any(String), mockReagendamento.id, 'google-event-456');
 		});
 
 		it('delete retorna 404 é tratado como sucesso e cria novo evento', async () => {
@@ -273,7 +273,7 @@ describe('CalendarProjection', () => {
 
 			expect(mockDeleteEvent).toHaveBeenCalledWith('old-google-event');
 			expect(mockCreateEvent).toHaveBeenCalled();
-			expect(updateGoogleEventId).toHaveBeenCalledWith(mockReagendamento.id, 'google-event-456');
+			expect(updateGoogleEventId).toHaveBeenCalledWith(expect.any(String), mockReagendamento.id, 'google-event-456');
 		});
 
 		it('delete falha com erro real impede criação do novo evento', async () => {
@@ -887,7 +887,7 @@ describe('CalendarProjection', () => {
 
 			expect(mockDeleteEvent).toHaveBeenCalledWith('google-B');
 			expect(mockCreateEvent).toHaveBeenCalled();
-			expect(updateGoogleEventId).toHaveBeenCalledWith(eventoC.id, 'google-event-789');
+			expect(updateGoogleEventId).toHaveBeenCalledWith('user-1', eventoC.id, 'google-event-789');
 		});
 	});
 

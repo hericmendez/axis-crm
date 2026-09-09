@@ -1,5 +1,6 @@
 import type { InternalTool } from './internal-tool.js';
 import type { Lead } from '../../types/lead.js';
+import { AppError } from '../../utils/errors.js';
 
 export interface UpdateLeadInput {
 	leadId: string;
@@ -9,14 +10,17 @@ export interface UpdateLeadInput {
 
 export interface UpdateLeadToolDeps {
 	leadService: {
-		update: (id: string, patch: Record<string, unknown>, userId?: string) => Promise<Lead>;
+		update: (userId: string, id: string, patch: Record<string, unknown>) => Promise<Lead>;
 	};
 }
 
 export function createUpdateLeadTool(deps: UpdateLeadToolDeps): InternalTool<UpdateLeadInput> {
 	return {
 		async execute(params) {
-			const updated = await deps.leadService.update(params.leadId, params.patch, params.userId);
+			if (!params.userId) {
+				throw new AppError(401, 'Autenticação necessária');
+			}
+			const updated = await deps.leadService.update(params.userId, params.leadId, params.patch);
 			return {
 				type: 'SUCCESS',
 				message: `Lead atualizado: ${updated.nome}.`,

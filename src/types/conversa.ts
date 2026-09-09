@@ -20,6 +20,7 @@ export interface ConversationContext {
 
 export interface Conversa {
 	id: string;
+	userId: string;
 	canal: ConversaCanal;
 	chatIdExterno: string;
 	leadId?: string;
@@ -32,6 +33,7 @@ export interface Conversa {
 }
 
 export interface CreateConversaInput {
+	userId: string;
 	canal: ConversaCanal;
 	chatIdExterno: string;
 }

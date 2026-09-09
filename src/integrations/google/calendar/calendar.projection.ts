@@ -176,7 +176,7 @@ export async function calendarProjection(input: CalendarProjectionInput): Promis
 		const calendarEvent = mapToCalendarEvent(evento, lead);
 		const result = await calendarAdapter.createEvent(calendarEvent);
 
-		await eventoRepository.updateGoogleEventId(evento.id, result.id);
+		await eventoRepository.updateGoogleEventId(userId, evento.id, result.id);
 
 		logger.info(
 			{

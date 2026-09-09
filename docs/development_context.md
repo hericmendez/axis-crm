@@ -79,16 +79,16 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 - **PASSO 3.6 — Runtime Validation**: 13 testes runtime contra Google APIs reais; OAuth, provisioning, Calendar projection, Sheets projection, idempotência verificadas
 - **PASSO 3.8 — Auto-Provisioning**: `provision()` chamado automaticamente após OAuth callback; provisioning failure isolation (log, não falha OAuth)
 
-**Fase 5 — Assistente de Agenda (PASSOS 5.1):**
+**Fase 5 — Assistente de Agenda (PASSOS 5.1–5.3):**
 
 - **PASSO 5.1 — Calendar Query Adapter**: `ICalendarQueryAdapter` + `GoogleCalendarQueryAdapter` para leitura de eventos do Google Calendar; `CalendarQueryEvent` normalizado (timed + all-day); userId → GoogleConnection → calendarId resolution; 14 unit tests + 7 runtime tests
+- **PASSO 5.2 — Agenda Avançada**: `AgendaService.consultarAgenda()` combina eventos do MongoDB (domain) com Google Calendar (read-through); `fundirEventos` deduplica por `googleEventId`; `calcularOcupacao`/`calcularDisponibilidade` computam slots; calendarStatus propaga OK/NO_CONNECTION/NO_CALENDAR/UNAVAILABLE; failure isolation preserva dados do domínio quando Google falha; tipagem `AgendaEventoView`/`AgendaView`/`Intervalo`/`CalendarStatus`
+- **PASSO 5.3 — Vinculação Conversa→Lead**: Orchestrator vincula conversa ao lead automaticamente quando o intent router resolve um lead (CRIAR_LEAD, ATUALIZAR_LEAD, REGISTRAR_EVENTO); `OrchestratorResult.SUCCESS.leadId` propaga identidade do lead; `conversaService.associateLead` chamado após routeIntent; first-resolved-wins idempotência (não sobrescreve leadId existente); failure isolation (log, não falha resposta); 8 novos testes (orchestrator + intent-router)
+- **PASSO 5.4 — Correção de Eventos**: sem novos intents — reutiliza REGISTRAR_EVENTO com tipo DESISTENCIA (cancelar) e REAGENDAMENTO (reagendar), já mapeados no prompt do LLM; `eventoRepository.findActiveForLead()` lista agendamentos não-substituídos; `eventoService.resolveTarget()` com semântica explícita 0/1/múltiplos (FOUND/NOT_FOUND/ALREADY_RESOLVED/AMBIGUOUS), filtro por dia (America/Sao_Paulo) para cancelamento com data, `eventoId` explícito com verificação de pertencimento ao lead; router bloqueia mutação em 0/múltiplos e em alvo já resolvido (idempotência); mutação continua em `eventoService.create` + `calendarProjection` com failure isolation; 20 novos testes
 
 ### Não existe ainda
 
 - Fallback Ollama (provider local)
-- Agenda Avançada (merge Calendar + MongoDB)
-- Vinculação automática Conversa→Lead
-- Correção de eventos via chat (cancelamento/reagendamento)
 - Multi-usuário WhatsApp
 
 ## 5. Roadmap (docs/00-roadmap.md)
@@ -101,11 +101,11 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
 | 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅ | ✅ |
 | 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry ✅; Runtime Validation ✅; Auto-Provisioning ✅ | ✅ |
-| 5 | Assistente de Agenda: Calendar Query ✅; Agenda Avançada; Vinculação Conversa→Lead; Correção de Eventos | ⬜ |
-| 6 | API/painel: auth, endpoints admin, React separado | ⬜ |
+| 5 | Assistente de Agenda: Calendar Query ✅; Agenda Avançada ✅; Vinculação Conversa→Lead ✅; Correção de Eventos ✅ | ✅ |
+| 6 | API/painel ✅ COMPLETA (6.1–6.10): painel React + API multi-tenant + E2E (10 journeys browser + 8 jornadas HTTP); veredicto em docs/00-roadmap.md | ✅ |
 | 7 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Fase 5 PASSO 5.1 concluído (Calendar Query Adapter). Próximo: PASSO 5.2 (Agenda Avançada).
+**Próximos passos imediatos:** Phase 6 COMPLETA (6.1–6.10 ✅). Veredicto e próximos candidatos em docs/00-roadmap.md.
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 

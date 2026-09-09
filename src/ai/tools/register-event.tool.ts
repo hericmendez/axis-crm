@@ -1,5 +1,6 @@
 import type { InternalTool } from './internal-tool.js';
 import type { EventoTipo } from '../../types/evento.js';
+import { AppError } from '../../utils/errors.js';
 
 export interface RegisterEventInput {
 	leadId: string;
@@ -17,6 +18,7 @@ export interface RegisterEventToolDeps {
 			tipo: EventoTipo;
 			data?: Date;
 			observacoes?: string;
+			userId: string;
 		}) => Promise<{ id: string }>;
 	};
 }
@@ -24,12 +26,15 @@ export interface RegisterEventToolDeps {
 export function createRegisterEventTool(deps: RegisterEventToolDeps): InternalTool<RegisterEventInput> {
 	return {
 		async execute(params) {
+			if (!params.userId) {
+				throw new AppError(401, 'Autenticação necessária');
+			}
 			const evento = await deps.eventoService.create({
 				leadId: params.leadId,
 				tipo: params.tipo,
+				userId: params.userId,
 				...(params.data ? { data: params.data } : {}),
 				...(params.observacoes ? { observacoes: params.observacoes } : {}),
-				...(params.userId ? { userId: params.userId } : {}),
 			});
 			return {
 				type: 'SUCCESS',

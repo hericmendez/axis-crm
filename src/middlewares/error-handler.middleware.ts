@@ -14,6 +14,17 @@ export function errorHandler(
 		return;
 	}
 
+	// Malformed JSON bodies must not surface as 500s nor leak parser internals
+	if (
+		typeof err === 'object' &&
+		err !== null &&
+		(err as { type?: unknown }).type === 'entity.parse.failed'
+	) {
+		logger.warn({ path: req.originalUrl }, 'Corpo JSON inválido');
+		res.status(400).json({ error: 'Corpo da requisição inválido' });
+		return;
+	}
+
 	logger.error({ err, path: req.originalUrl }, 'Erro não tratado');
 	res.status(500).json({ error: 'Internal Server Error' });
 }

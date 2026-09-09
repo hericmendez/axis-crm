@@ -17,6 +17,9 @@ const baseLead = {
 	contatoOrigem: 'indicacao',
 };
 
+const USER_A = '507f1f77bcf86cd799439011';
+const USER_B = '507f1f77bcf86cd799439022';
+
 describe('eventos: efeitos no lead e imutabilidade', () => {
 	beforeAll(async () => {
 		const uri = await startTestMongo();
@@ -36,56 +39,56 @@ describe('eventos: efeitos no lead e imutabilidade', () => {
 	});
 
 	it('AGENDAMENTO atualiza dataAgendamento do lead', async () => {
-		const lead = await leadService.create(baseLead);
+		const lead = await leadService.create(USER_A, baseLead);
 		const data = new Date('2026-09-01T10:00:00Z');
-		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO', data });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'AGENDAMENTO', data });
 
-		const updated = await leadService.getById(lead.id);
+		const updated = await leadService.getById(USER_A, lead.id);
 		expect(updated.dataAgendamento?.toISOString()).toBe(data.toISOString());
 	});
 
 	it('REAGENDAMENTO atualiza dataAgendamento e status REAGENDADO', async () => {
-		const lead = await leadService.create(baseLead);
+		const lead = await leadService.create(USER_A, baseLead);
 		const novaData = new Date('2026-09-05T14:00:00Z');
-		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO' });
-		await eventoService.create({ leadId: lead.id, tipo: 'REAGENDAMENTO', data: novaData });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'AGENDAMENTO' });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'REAGENDAMENTO', data: novaData });
 
-		const updated = await leadService.getById(lead.id);
+		const updated = await leadService.getById(USER_A, lead.id);
 		expect(updated.status).toBe('REAGENDADO');
 		expect(updated.dataAgendamento?.toISOString()).toBe(novaData.toISOString());
 	});
 
 	it('VENDA define status VENDIDO e dataConversao', async () => {
-		const lead = await leadService.create(baseLead);
+		const lead = await leadService.create(USER_A, baseLead);
 		const data = new Date('2026-09-02T18:30:00Z');
-		await eventoService.create({ leadId: lead.id, tipo: 'VENDA', data });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'VENDA', data });
 
-		const updated = await leadService.getById(lead.id);
+		const updated = await leadService.getById(USER_A, lead.id);
 		expect(updated.status).toBe('VENDIDO');
 		expect(updated.dataConversao?.toISOString()).toBe(data.toISOString());
 	});
 
 	it('DESISTENCIA define status PERDIDO', async () => {
-		const lead = await leadService.create(baseLead);
-		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO' });
-		await eventoService.create({ leadId: lead.id, tipo: 'DESISTENCIA' });
+		const lead = await leadService.create(USER_A, baseLead);
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'AGENDAMENTO' });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'DESISTENCIA' });
 
-		const updated = await leadService.getById(lead.id);
+		const updated = await leadService.getById(USER_A, lead.id);
 		expect(updated.status).toBe('PERDIDO');
 	});
 
 	it('NO_SHOW define status NO_SHOW', async () => {
-		const lead = await leadService.create(baseLead);
-		await eventoService.create({ leadId: lead.id, tipo: 'AGENDAMENTO' });
-		await eventoService.create({ leadId: lead.id, tipo: 'NO_SHOW' });
+		const lead = await leadService.create(USER_A, baseLead);
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'AGENDAMENTO' });
+		await eventoService.create({ userId: USER_A, leadId: lead.id, tipo: 'NO_SHOW' });
 
-		const updated = await leadService.getById(lead.id);
+		const updated = await leadService.getById(USER_A, lead.id);
 		expect(updated.status).toBe('NO_SHOW');
 	});
 
 	it('rejeita evento para lead inexistente com 404', async () => {
 		await expect(
-			eventoService.create({ leadId: '507f1f77bcf86cd799439011', tipo: 'VENDA' }),
+			eventoService.create({ userId: USER_A, leadId: '507f1f77bcf86cd799439011', tipo: 'VENDA' }),
 		).rejects.toMatchObject({ statusCode: 404 } satisfies Partial<AppError>);
 	});
 
@@ -110,10 +113,10 @@ describe('métricas e agenda', () => {
 	});
 
 	it('leadsPorStatus agrupa corretamente', async () => {
-		await leadService.create(baseLead);
-		await leadService.create({ ...baseLead, telefone: '11999999999', status: 'VENDIDO' });
+		await leadService.create(USER_A, baseLead);
+		await leadService.create(USER_A, { ...baseLead, telefone: '11999999999', status: 'VENDIDO' });
 
-		const porStatus = await metricasService.leadsPorStatus();
+		const porStatus = await metricasService.leadsPorStatus(USER_A);
 		const vendidos = porStatus.find((s) => s.status === 'VENDIDO');
 		const semStatus = porStatus.find((s) => s.status === 'SEM_STATUS');
 		expect(vendidos?.total).toBe(1);
@@ -121,46 +124,42 @@ describe('métricas e agenda', () => {
 	});
 
 	it('taxaConversao calcula proporção de vendidos', async () => {
-		const l1 = await leadService.create(baseLead);
-		await leadService.create({ ...baseLead, telefone: '11999999999' });
-		await eventoService.create({ leadId: l1.id, tipo: 'VENDA' });
+		const l1 = await leadService.create(USER_A, baseLead);
+		await leadService.create(USER_A, { ...baseLead, telefone: '11999999999' });
+		await eventoService.create({ userId: USER_A, leadId: l1.id, tipo: 'VENDA' });
 
-		const taxa = await metricasService.taxaConversao();
+		const taxa = await metricasService.taxaConversao(USER_A);
 		expect(taxa.totalLeads).toBe(2);
 		expect(taxa.vendidos).toBe(1);
 		expect(taxa.taxaConversao).toBeCloseTo(0.5);
 	});
 
 	it('eventosPorTipo respeita intervalo >= de e < ate', async () => {
-		const lead = await leadService.create(baseLead);
-		await eventoService.create({
-			leadId: lead.id,
+		const lead = await leadService.create(USER_A, baseLead);
+		await eventoService.create({ userId: USER_A, leadId: lead.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-01T09:00:00Z'),
 		});
-		await eventoService.create({
-			leadId: lead.id,
+		await eventoService.create({ userId: USER_A, leadId: lead.id,
 			tipo: 'VENDA',
 			data: new Date('2026-09-01T10:00:00Z'),
 		});
-		await eventoService.create({
-			leadId: lead.id,
+		await eventoService.create({ userId: USER_A, leadId: lead.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-02T09:00:00Z'),
 		});
-		await eventoService.create({
-			leadId: lead.id,
+		await eventoService.create({ userId: USER_A, leadId: lead.id,
 			tipo: 'NO_SHOW',
 			data: new Date('2026-09-02T10:00:00Z'),
 		});
 
-		const dentro = await metricasService.eventosPorTipo({
+		const dentro = await metricasService.eventosPorTipo(USER_A, {
 			de: new Date('2026-09-01T10:00:00Z'),
 			ate: new Date('2026-09-01T11:00:00Z'),
 		});
 		expect(dentro).toEqual([{ tipo: 'VENDA', total: 1 }]);
 
-		const fora = await metricasService.eventosPorTipo({
+		const fora = await metricasService.eventosPorTipo(USER_A, {
 			de: new Date('2026-09-02T10:00:00Z'),
 			ate: new Date('2026-09-02T11:00:00Z'),
 		});
@@ -168,30 +167,38 @@ describe('métricas e agenda', () => {
 	});
 
 	it('agenda consulta apenas lead.dataAgendamento com intervalo meio-aberto', async () => {
-		const l1 = await leadService.create(baseLead);
-		await eventoService.create({
-			leadId: l1.id,
+		const l1 = await leadService.create(USER_A, baseLead);
+		await eventoService.create({ userId: USER_A, leadId: l1.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-01T10:00:00Z'),
 		});
-		const l2 = await leadService.create({ ...baseLead, telefone: '11999999999' });
-		await eventoService.create({
-			leadId: l2.id,
+		const l2 = await leadService.create(USER_A, { ...baseLead, telefone: '11999999999' });
+		await eventoService.create({ userId: USER_A, leadId: l2.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-02T10:00:00Z'),
 		});
 
-		const agendaDia1 = await metricasService.agenda(
+		const agendaDia1 = await metricasService.agenda(USER_A,
 			new Date('2026-09-01T00:00:00Z'),
 			new Date('2026-09-02T00:00:00Z'),
 		);
 		expect(agendaDia1).toHaveLength(1);
 		expect(agendaDia1[0].leadId).toBe(l1.id);
 
-		const agendaDoisDias = await metricasService.agenda(
+		const agendaDoisDias = await metricasService.agenda(USER_A,
 			new Date('2026-09-01T00:00:00Z'),
 			new Date('2026-09-03T00:00:00Z'),
 		);
 		expect(agendaDoisDias).toHaveLength(2);
+	});
+
+	it('métricas de outro tenant não incluem dados alheios', async () => {
+		await leadService.create(USER_A, baseLead);
+		expect(await metricasService.leadsPorStatus(USER_B)).toEqual([]);
+		expect(await metricasService.taxaConversao(USER_B)).toEqual({
+			totalLeads: 0,
+			vendidos: 0,
+			taxaConversao: 0,
+		});
 	});
 });

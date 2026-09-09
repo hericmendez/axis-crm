@@ -63,4 +63,4 @@ export type OrchestratorResult =
 	| InvalidDate
 	| PastDate
 	| InvalidTime
-	| { type: 'SUCCESS'; message: string; data?: unknown };
+	| { type: 'SUCCESS'; message: string; data?: unknown; leadId?: string };

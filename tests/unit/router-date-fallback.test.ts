@@ -1,7 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routeIntent, type IntentRouterDeps } from '../../src/ai/intent-router.js';
 import type { InternalTool } from '../../src/ai/tools/internal-tool.js';
 import type { OrchestratorResult } from '../../src/ai/errors.js';
+
+const REFERENCE_NOW = new Date(2026, 7, 27, 10, 0, 0);
+
+beforeEach(() => {
+	vi.useFakeTimers();
+	vi.setSystemTime(REFERENCE_NOW);
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 function makeTool(result: OrchestratorResult): InternalTool {
 	return { execute: vi.fn().mockResolvedValue(result) };
@@ -16,6 +27,10 @@ function makeDeps(overrides: Partial<IntentRouterDeps> = {}): IntentRouterDeps {
 		},
 		eventoService: {
 			create: vi.fn().mockResolvedValue({ id: 'evento-1' }),
+			resolveTarget: vi.fn().mockResolvedValue({
+				status: 'FOUND',
+				evento: { id: 'evento-1', leadId: 'lead-1', tipo: 'AGENDAMENTO', data: new Date('2026-09-01T10:00:00-03:00'), createdAt: new Date() },
+			}),
 		},
 		metricasService: {
 			agenda: vi.fn().mockResolvedValue([]),

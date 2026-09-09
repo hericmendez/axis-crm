@@ -6,6 +6,7 @@ export type EventoTipo = (typeof EVENTO_TIPOS)[number];
 
 export interface Evento {
 	id: string;
+	userId: string;
 	leadId: string;
 	tipo: EventoTipo;
 	data: Date;
@@ -20,7 +21,11 @@ export interface CreateEventoInput {
 	tipo: EventoTipo;
 	data?: Date;
 	observacoes?: string;
-	userId?: string;
+	userId: string;
+	// Explicit correction target (panel use). Validated: same tenant + lead,
+	// active (AGENDAMENTO/REAGENDAMENTO, not superseded). When absent, the
+	// predecessor is auto-resolved (last active) as in the chat flow.
+	eventoId?: string;
 }
 
 export interface Periodo {

@@ -1,7 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routeIntent, type IntentRouterDeps } from '../../src/ai/intent-router.js';
 import type { InternalTool } from '../../src/ai/tools/internal-tool.js';
 import type { OrchestratorResult } from '../../src/ai/errors.js';
+
+const REFERENCE_NOW = new Date(2026, 7, 27, 10, 0, 0);
+
+beforeEach(() => {
+	vi.useFakeTimers();
+	vi.setSystemTime(REFERENCE_NOW);
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 function makeTool(result: OrchestratorResult): InternalTool {
 	return { execute: vi.fn().mockResolvedValue(result) };
@@ -16,6 +27,10 @@ function makeDeps(overrides: Partial<IntentRouterDeps> = {}): IntentRouterDeps {
 		},
 		eventoService: {
 			create: vi.fn().mockResolvedValue({ id: 'evento-1' }),
+			resolveTarget: vi.fn().mockResolvedValue({
+				status: 'FOUND',
+				evento: { id: 'evento-1', leadId: 'lead-1', tipo: 'AGENDAMENTO', data: new Date('2026-09-01T10:00:00-03:00'), createdAt: new Date() },
+			}),
 		},
 		metricasService: {
 			agenda: vi.fn().mockResolvedValue([]),
@@ -594,6 +609,204 @@ describe('intent-router', () => {
 		});
 	});
 
+	describe('CANCELAR / REAGENDAR via REGISTRAR_EVENTO (PASSO 5.4)', () => {
+		const lead = { id: 'lead-1', nome: 'João', telefone: '16999999999' };
+		const eventoAtivo = {
+			id: 'evento-1',
+			leadId: 'lead-1',
+			tipo: 'AGENDAMENTO' as const,
+			data: new Date('2026-09-05T10:00:00-03:00'),
+			createdAt: new Date('2026-08-20T10:00:00-03:00'),
+		};
+
+		function depsComLeadEAlvo(alvo: unknown) {
+			return makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue(lead),
+				},
+				eventoService: {
+					create: vi.fn().mockResolvedValue({ id: 'evento-novo' }),
+					resolveTarget: vi.fn().mockResolvedValue(alvo),
+				},
+			});
+		}
+
+		it('DESISTENCIA com único ativo → SUCCESS e executa tool', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBe('lead-1');
+			}
+			expect(deps.tools.registerEvent.execute).toHaveBeenCalledWith(
+				expect.objectContaining({ leadId: 'lead-1', tipo: 'DESISTENCIA' }),
+			);
+		});
+
+		it('DESISTENCIA sem ativo → ENTITY_NOT_FOUND e NÃO executa tool', async () => {
+			const deps = depsComLeadEAlvo({ status: 'NOT_FOUND' });
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('ENTITY_NOT_FOUND');
+			expect(deps.tools.registerEvent.execute).not.toHaveBeenCalled();
+		});
+
+		it('DESISTENCIA com múltiplos ativos → AMBIGUOUS_ENTITY e NÃO executa tool', async () => {
+			const deps = depsComLeadEAlvo({
+				status: 'AMBIGUOUS',
+				candidates: [eventoAtivo, { ...eventoAtivo, id: 'evento-2' }],
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('AMBIGUOUS_ENTITY');
+			if (result.type === 'AMBIGUOUS_ENTITY') {
+				expect(result.candidates).toHaveLength(2);
+			}
+			expect(deps.tools.registerEvent.execute).not.toHaveBeenCalled();
+		});
+
+		it('repetir cancelamento (ALREADY_RESOLVED) → informa sem mutação', async () => {
+			const deps = depsComLeadEAlvo({ status: 'ALREADY_RESOLVED', evento: eventoAtivo });
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('ENTITY_NOT_FOUND');
+			if (result.type === 'ENTITY_NOT_FOUND') {
+				expect(result.message).toContain('já foi cancelado');
+			}
+			expect(deps.tools.registerEvent.execute).not.toHaveBeenCalled();
+		});
+
+		it('DESISTENCIA com data repassa dataAlvo ao resolveTarget', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA', data: '2026-09-05T10:00:00' },
+				},
+				deps,
+			);
+			expect(deps.eventoService.resolveTarget).toHaveBeenCalledWith(
+				undefined,
+				'lead-1',
+				expect.objectContaining({ dataAlvo: expect.any(Date) }),
+			);
+		});
+
+		it('REAGENDAMENTO com único ativo e nova data → SUCCESS com data nova', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'REAGENDAMENTO', data: '2026-09-12T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			expect(deps.tools.registerEvent.execute).toHaveBeenCalledWith(
+				expect.objectContaining({ tipo: 'REAGENDAMENTO', data: new Date('2026-09-12T14:00:00') }),
+			);
+		});
+
+		it('REAGENDAMENTO NÃO usa a nova data como filtro do alvo', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'REAGENDAMENTO', data: '2026-09-12T14:00:00' },
+				},
+				deps,
+			);
+			expect(deps.eventoService.resolveTarget).toHaveBeenCalledWith(undefined, 'lead-1', {});
+		});
+
+		it('REAGENDAMENTO com múltiplos ativos → AMBIGUOUS_ENTITY', async () => {
+			const deps = depsComLeadEAlvo({
+				status: 'AMBIGUOUS',
+				candidates: [eventoAtivo, { ...eventoAtivo, id: 'evento-2' }],
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', tipo: 'REAGENDAMENTO', data: '2026-09-12T14:00:00' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('AMBIGUOUS_ENTITY');
+			expect(deps.tools.registerEvent.execute).not.toHaveBeenCalled();
+		});
+
+		it('eventoId repassado ao resolveTarget', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.95,
+					parameters: { leadId: 'lead-1', tipo: 'DESISTENCIA', eventoId: 'evento-1' },
+				},
+				deps,
+			);
+			expect(deps.eventoService.resolveTarget).toHaveBeenCalledWith(
+				undefined,
+				'lead-1',
+				expect.objectContaining({ eventoId: 'evento-1' }),
+			);
+		});
+
+		it('VENDA não consulta resolveTarget', async () => {
+			const deps = depsComLeadEAlvo({ status: 'FOUND', evento: eventoAtivo });
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-1', tipo: 'VENDA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			expect(deps.eventoService.resolveTarget).not.toHaveBeenCalled();
+		});
+	});
+
 	describe('erros', () => {
 		it('retorna SERVICE_ERROR quando tool lança exceção', async () => {
 			const deps = makeDeps({
@@ -626,6 +839,111 @@ describe('intent-router', () => {
 				deps,
 			);
 			expect(result.type).toBe('INVALID_INTENT');
+		});
+	});
+
+	describe('leadId em SUCCESS (para vinculação conversa→lead)', () => {
+		it('CRIAR_LEAD inclui leadId no resultado', async () => {
+			const deps = makeDeps({
+				tools: {
+					...makeDeps().tools,
+					createLead: makeTool({ type: 'SUCCESS', message: 'ok', data: { id: 'lead-novo' }, leadId: 'lead-novo' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'CRIAR_LEAD',
+					confidence: 0.95,
+					parameters: { nome: 'João', telefone: '16999999999' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBe('lead-novo');
+			}
+		});
+
+		it('ATUALIZAR_LEAD inclui leadId do lead resolvido', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-42', nome: 'Maria', telefone: '11987654321' }),
+				},
+				tools: {
+					...makeDeps().tools,
+					updateLead: makeTool({ type: 'SUCCESS', message: 'ok' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'ATUALIZAR_LEAD',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-42', status: 'VENDIDO' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBe('lead-42');
+			}
+		});
+
+		it('REGISTRAR_EVENTO inclui leadId do lead resolvido', async () => {
+			const deps = makeDeps({
+				leadRepository: {
+					...makeDeps().leadRepository,
+					findById: vi.fn().mockResolvedValue({ id: 'lead-99', nome: 'Ana', telefone: '11999887766' }),
+				},
+				tools: {
+					...makeDeps().tools,
+					registerEvent: makeTool({ type: 'SUCCESS', message: 'ok' }),
+				},
+			});
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'REGISTRAR_EVENTO',
+					confidence: 0.9,
+					parameters: { leadId: 'lead-99', tipo: 'VENDA' },
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBe('lead-99');
+			}
+		});
+
+		it('CONSULTAR_AGENDA não inclui leadId', async () => {
+			const deps = makeDeps();
+			const result = await routeIntent(
+				{
+					mode: 'ACTION',
+					intent: 'CONSULTAR_AGENDA',
+					confidence: 0.9,
+					parameters: {},
+				},
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBeUndefined();
+			}
+		});
+
+		it('CONVERSAR não inclui leadId', async () => {
+			const deps = makeDeps();
+			const result = await routeIntent(
+				{ mode: 'CHAT', confidence: 0.9, response: 'Olá!' },
+				deps,
+			);
+			expect(result.type).toBe('SUCCESS');
+			if (result.type === 'SUCCESS') {
+				expect(result.leadId).toBeUndefined();
+			}
 		});
 	});
 });

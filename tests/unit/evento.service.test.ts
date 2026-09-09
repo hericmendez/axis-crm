@@ -13,6 +13,7 @@ vi.mock('../../src/repositories/evento.repository.js', () => ({
 	deleteById: vi.fn(),
 	findByLeadId: vi.fn(),
 	findLastActiveForLead: vi.fn(),
+	findActiveForLead: vi.fn(),
 	findById: vi.fn(),
 	updateGoogleEventId: vi.fn(),
 }));
@@ -24,6 +25,8 @@ vi.mock('../../src/integrations/google/calendar/calendar.projection.js', () => (
 vi.mock('../../src/integrations/google/sheets/sheets.projection.js', () => ({
 	sheetsProjection: vi.fn(),
 }));
+
+const USER_T = '507f1f77bcf86cd799439011';
 
 const mockLead = {
 	id: '507f1f77bcf86cd799439011',
@@ -60,7 +63,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.create).mockResolvedValue(mockAgendamento);
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-01T10:00:00Z'),
@@ -82,7 +85,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.create).mockResolvedValue(mockVenda);
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'VENDA',
 		});
@@ -97,7 +100,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.create).mockResolvedValue(mockReagendamento);
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'REAGENDAMENTO',
 			data: new Date('2026-09-02T10:00:00Z'),
@@ -105,7 +108,7 @@ describe('EventoService.create', () => {
 
 		expect(result.tipo).toBe('REAGENDAMENTO');
 		expect(result.previousEventoId).toBe(mockAgendamento.id);
-		expect(eventoRepository.findLastActiveForLead).toHaveBeenCalledWith(mockLead.id);
+		expect(eventoRepository.findLastActiveForLead).toHaveBeenCalledWith(mockLead.id, mockLead.id);
 	});
 
 	it('cria REAGENDAMENTO em cadeia com previousEventoId correto', async () => {
@@ -119,7 +122,7 @@ describe('EventoService.create', () => {
 		});
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'REAGENDAMENTO',
 			data: new Date('2026-09-03T10:00:00Z'),
@@ -141,7 +144,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.create).mockResolvedValue(mockDesistencia);
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'DESISTENCIA',
 		});
@@ -162,7 +165,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.create).mockResolvedValue(mockNoShow);
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'NO_SHOW',
 		});
@@ -176,7 +179,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.findLastActiveForLead).mockResolvedValue(null);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: mockLead.id,
 				tipo: 'REAGENDAMENTO',
 				data: new Date('2026-09-02T10:00:00Z'),
@@ -189,7 +192,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.findLastActiveForLead).mockResolvedValue(null);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: mockLead.id,
 				tipo: 'DESISTENCIA',
 			}),
@@ -201,7 +204,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.findLastActiveForLead).mockResolvedValue(null);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: mockLead.id,
 				tipo: 'NO_SHOW',
 			}),
@@ -212,7 +215,7 @@ describe('EventoService.create', () => {
 		vi.mocked(leadRepository.findById).mockResolvedValue(null);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: '507f1f77bcf86cd799439099',
 				tipo: 'AGENDAMENTO',
 			}),
@@ -226,14 +229,14 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.deleteById).mockResolvedValue(true);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: mockLead.id,
 				tipo: 'AGENDAMENTO',
 				data: new Date('2026-09-01T10:00:00Z'),
 			}),
 		).rejects.toThrow('Falha ao aplicar efeitos do evento no lead');
 
-		expect(eventoRepository.deleteById).toHaveBeenCalledWith(mockAgendamento.id);
+		expect(eventoRepository.deleteById).toHaveBeenCalledWith(mockLead.id, mockAgendamento.id);
 	});
 
 	it('resolução de predecessor não usa data > now', async () => {
@@ -253,7 +256,7 @@ describe('EventoService.create', () => {
 		});
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'REAGENDAMENTO',
 			data: new Date('2026-09-02T10:00:00Z'),
@@ -270,16 +273,15 @@ describe('EventoService.create', () => {
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 		vi.mocked(eventoRepository.findById).mockResolvedValue(null);
 
-		await eventoService.create({
+		await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-01T10:00:00Z'),
-			userId: 'user-1',
 		});
 
 		expect(calendarProjection).toHaveBeenCalledWith(
 			expect.objectContaining({
-				userId: 'user-1',
+				userId: mockLead.id,
 				evento: mockAgendamento,
 				lead: mockLead,
 			}),
@@ -294,7 +296,7 @@ describe('EventoService.create', () => {
 		vi.mocked(leadRepository.updateById).mockResolvedValue(mockLead);
 		vi.mocked(calendarProjection).mockRejectedValue(new Error('Google API error'));
 
-		const result = await eventoService.create({
+		const result = await eventoService.create({ userId: mockLead.id,
 			leadId: mockLead.id,
 			tipo: 'AGENDAMENTO',
 			data: new Date('2026-09-01T10:00:00Z'),
@@ -312,7 +314,7 @@ describe('EventoService.create', () => {
 		vi.mocked(eventoRepository.deleteById).mockResolvedValue(true);
 
 		await expect(
-			eventoService.create({
+			eventoService.create({ userId: mockLead.id,
 				leadId: mockLead.id,
 				tipo: 'AGENDAMENTO',
 				data: new Date('2026-09-01T10:00:00Z'),
@@ -327,9 +329,10 @@ describe('EventoRepository.updateGoogleEventId', () => {
 	it('chama updateGoogleEventId com parâmetros corretos', async () => {
 		vi.mocked(eventoRepository.updateGoogleEventId).mockResolvedValue(true);
 
-		const result = await eventoRepository.updateGoogleEventId('507f1f77bcf86cd799439012', 'google-event-123');
+		const result = await eventoRepository.updateGoogleEventId(mockLead.id, '507f1f77bcf86cd799439012', 'google-event-123');
 
 		expect(eventoRepository.updateGoogleEventId).toHaveBeenCalledWith(
+			mockLead.id,
 			'507f1f77bcf86cd799439012',
 			'google-event-123',
 		);
@@ -341,5 +344,118 @@ describe('EventoRepository.updateGoogleEventId', () => {
 
 		const result = await eventoRepository.updateGoogleEventId('invalid-id', 'google-event-123');
 		expect(result).toBe(false);
+	});
+});
+
+describe('EventoService.resolveTarget', () => {
+	const LEAD_ID = '507f1f77bcf86cd799439011';
+	const OUTRO_LEAD = '507f1f77bcf86cd799439099';
+	const EVENTO_A = {
+		id: '507f1f77bcf86cd799439012',
+		leadId: LEAD_ID,
+		tipo: 'AGENDAMENTO' as const,
+		data: new Date('2026-09-10T10:00:00-03:00'),
+		createdAt: new Date('2026-09-01T10:00:00-03:00'),
+	};
+	const EVENTO_B = {
+		id: '507f1f77bcf86cd799439013',
+		leadId: LEAD_ID,
+		tipo: 'AGENDAMENTO' as const,
+		data: new Date('2026-09-11T14:00:00-03:00'),
+		createdAt: new Date('2026-09-02T10:00:00-03:00'),
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('eventoId de outro lead → NOT_FOUND (isolamento)', async () => {
+		vi.mocked(eventoRepository.findById).mockResolvedValue({ ...EVENTO_A, leadId: OUTRO_LEAD });
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, { eventoId: EVENTO_A.id });
+
+		expect(result).toEqual({ status: 'NOT_FOUND' });
+	});
+
+	it('eventoId inexistente → NOT_FOUND', async () => {
+		vi.mocked(eventoRepository.findById).mockResolvedValue(null);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, { eventoId: '507f1f77bcf86cd799439000' });
+
+		expect(result).toEqual({ status: 'NOT_FOUND' });
+	});
+
+	it('eventoId ativo do próprio lead → FOUND', async () => {
+		vi.mocked(eventoRepository.findById).mockResolvedValue(EVENTO_A);
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([EVENTO_A]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, { eventoId: EVENTO_A.id });
+
+		expect(result).toEqual({ status: 'FOUND', evento: EVENTO_A });
+	});
+
+	it('eventoId já substituído → ALREADY_RESOLVED (idempotência)', async () => {
+		vi.mocked(eventoRepository.findById).mockResolvedValue(EVENTO_A);
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, { eventoId: EVENTO_A.id });
+
+		expect(result.status).toBe('ALREADY_RESOLVED');
+	});
+
+	it('eventoId com tipo terminal (VENDA) → ALREADY_RESOLVED', async () => {
+		const venda = { ...EVENTO_A, tipo: 'VENDA' as const };
+		vi.mocked(eventoRepository.findById).mockResolvedValue(venda);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, { eventoId: venda.id });
+
+		expect(result.status).toBe('ALREADY_RESOLVED');
+	});
+
+	it('nenhum ativo → NOT_FOUND', async () => {
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID);
+
+		expect(result).toEqual({ status: 'NOT_FOUND' });
+	});
+
+	it('único ativo → FOUND', async () => {
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([EVENTO_A]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID);
+
+		expect(result).toEqual({ status: 'FOUND', evento: EVENTO_A });
+	});
+
+	it('múltiplos ativos → AMBIGUOUS sem escolha arbitrária', async () => {
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([EVENTO_A, EVENTO_B]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID);
+
+		expect(result.status).toBe('AMBIGUOUS');
+		if (result.status === 'AMBIGUOUS') {
+			expect(result.candidates).toHaveLength(2);
+		}
+	});
+
+	it('dataAlvo filtra para o dia correspondente (SP) → FOUND', async () => {
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([EVENTO_A, EVENTO_B]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, {
+			dataAlvo: new Date('2026-09-11T09:00:00-03:00'),
+		});
+
+		expect(result).toEqual({ status: 'FOUND', evento: EVENTO_B });
+	});
+
+	it('dataAlvo sem correspondência → NOT_FOUND', async () => {
+		vi.mocked(eventoRepository.findActiveForLead).mockResolvedValue([EVENTO_A]);
+
+		const result = await eventoService.resolveTarget(USER_T, LEAD_ID, {
+			dataAlvo: new Date('2026-09-20T09:00:00-03:00'),
+		});
+
+		expect(result).toEqual({ status: 'NOT_FOUND' });
 	});
 });

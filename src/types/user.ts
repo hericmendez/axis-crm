@@ -2,6 +2,8 @@ export interface User {
 	id: string;
 	name: string;
 	apiKey?: string;
+	email?: string;
+	passwordHash?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

@@ -5,3 +5,4 @@ export const eventoRouter = Router();
 
 eventoRouter.post('/api/leads/:id/eventos', eventoController.create);
 eventoRouter.get('/api/leads/:id/eventos', eventoController.listByLead);
+eventoRouter.get('/api/leads/:id/eventos/:eventoId', eventoController.getById);

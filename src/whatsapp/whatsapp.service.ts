@@ -6,9 +6,11 @@ import * as sendRateLimiter from './send-rate-limiter.js';
 import { getEnv } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import * as conversaService from '../services/conversa.service.js';
+import { requireTenant } from '../services/tenant.js';
 import * as leadService from '../services/lead.service.js';
 import * as eventoService from '../services/evento.service.js';
 import * as metricasService from '../services/metricas.service.js';
+import * as agendaService from '../services/agenda.service.js';
 import * as leadRepository from '../repositories/lead.repository.js';
 import { createOrchestrator, type Orchestrator } from '../ai/orchestrator.js';
 import { buildResponse } from '../ai/response-builder.js';
@@ -35,6 +37,7 @@ export function initOrchestrator(): void {
 	orchestratorInstance = createOrchestrator({
 		llmProvider,
 		getConversationContext: conversaService.getConversationContext,
+		conversaService,
 		intentRouterDeps: {
 			leadService,
 			eventoService,
@@ -44,7 +47,7 @@ export function initOrchestrator(): void {
 				createLead: createCreateLeadTool({ leadService }),
 				updateLead: createUpdateLeadTool({ leadService }),
 				registerEvent: createRegisterEventTool({ eventoService }),
-				consultAgenda: createConsultAgendaTool({ metricasService }),
+				consultAgenda: createConsultAgendaTool({ agendaService }),
 			},
 		},
 	});
@@ -119,8 +122,20 @@ export async function handleIncomingMessage(
 	}
 
 	// Mensagens rejeitadas NUNCA chegam aqui: nenhuma conversa é criada/persistida.
-	const conversa = await conversaService.getOrCreate('whatsapp', msg.chatId);
-	await conversaService.appendMessage(conversa.id, { papel: 'usuario', conteudo: msg.body });
+	// O canal WhatsApp pertence a um único operador: AXIS_USER_ID deve ser o _id
+	// do User operador (ver scripts/create-user.ts). Sem ele, a tenancy da conversa
+	// não pode ser determinada e a mensagem é ignorada (fail-closed temporário até
+	// existir identidade por chat — dívida 6.3).
+	let operatorId: string;
+	try {
+		operatorId = requireTenant(env.AXIS_USER_ID);
+	} catch {
+		logger.error({ chatId: msg.chatId }, 'AXIS_USER_ID ausente ou inválido; mensagem ignorada');
+		return;
+	}
+
+	const conversa = await conversaService.getOrCreate(operatorId, 'whatsapp', msg.chatId);
+	await conversaService.appendMessage(operatorId, conversa.id, { papel: 'usuario', conteudo: msg.body });
 
 	logger.info(
 		{ chatId: msg.chatId, de: senderName, conversaId: conversa.id, texto: msg.body.slice(0, 100) },
@@ -132,10 +147,10 @@ export async function handleIncomingMessage(
 		return;
 	}
 
-	const result = await orchestratorInstance.processMessage(conversa.id, msg.body, env.AXIS_USER_ID);
+	const result = await orchestratorInstance.processMessage(conversa.id, msg.body, operatorId);
 	const responseText = buildResponse(result);
 
-	await conversaService.appendMessage(conversa.id, { papel: 'axis', conteudo: responseText });
+	await conversaService.appendMessage(operatorId, conversa.id, { papel: 'axis', conteudo: responseText });
 
 	try {
 		await sendMessage(msg.chatId, responseText);
@@ -143,16 +158,16 @@ export async function handleIncomingMessage(
 		logger.error({ chatId: msg.chatId, err }, 'Falha ao enviar resposta via WhatsApp');
 	}
 
-	void tryUpdateSummary(conversa.id);
+	void tryUpdateSummary(operatorId, conversa.id);
 }
 
-async function tryUpdateSummary(conversaId: string): Promise<void> {
+async function tryUpdateSummary(userId: string, conversaId: string): Promise<void> {
 	if (summarizingInFlight.has(conversaId)) {
 		return;
 	}
 	summarizingInFlight.add(conversaId);
 	try {
-		const conversa = await conversaService.get(conversaId);
+		const conversa = await conversaService.get(userId, conversaId);
 		if (!conversaService.shouldUpdateSummary(conversa)) {
 			return;
 		}
@@ -172,7 +187,7 @@ async function tryUpdateSummary(conversaId: string): Promise<void> {
 			return;
 		}
 
-		await conversaService.updateSummary(conversaId, result.summary, conversa.mensagens.length);
+		await conversaService.updateSummary(userId, conversaId, result.summary, conversa.mensagens.length);
 		logger.info({ conversaId, messageCount: conversa.mensagens.length }, 'Summary atualizado');
 	} catch (err) {
 		logger.error({ err, conversaId }, 'Falha ao atualizar summary; preservando anterior');

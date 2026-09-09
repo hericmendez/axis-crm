@@ -7,8 +7,11 @@ import { AppError } from '../../src/utils/errors.js';
 
 const WHATSAPP = 'whatsapp' as const;
 
+const USER_A = '507f1f77bcf86cd799439011';
+const USER_B = '507f1f77bcf86cd799439022';
+
 async function criarConversaDeTeste(): Promise<string> {
-	const conversa = await conversaService.getOrCreate(WHATSAPP, '120363411068401347@g.us');
+	const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, '120363411068401347@g.us');
 	return conversa.id;
 }
 
@@ -28,7 +31,7 @@ describe('ConversationService', () => {
 
 	describe('getOrCreate', () => {
 		it('cria uma nova conversa', async () => {
-			const conversa = await conversaService.getOrCreate(WHATSAPP, 'chat-externo@g.us');
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-externo@g.us');
 			expect(conversa.id).toBeTruthy();
 			expect(conversa.canal).toBe('whatsapp');
 			expect(conversa.chatIdExterno).toBe('chat-externo@g.us');
@@ -37,19 +40,19 @@ describe('ConversationService', () => {
 		});
 
 		it('retorna a mesma conversa para o mesmo chat externo', async () => {
-			const primeira = await conversaService.getOrCreate(WHATSAPP, 'chat-externo@g.us');
-			const segunda = await conversaService.getOrCreate(WHATSAPP, 'chat-externo@g.us');
+			const primeira = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-externo@g.us');
+			const segunda = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-externo@g.us');
 			expect(segunda.id).toBe(primeira.id);
 		});
 
 		it('conversas de chats diferentes são distintas', async () => {
-			const a = await conversaService.getOrCreate(WHATSAPP, 'chat-a@g.us');
-			const b = await conversaService.getOrCreate(WHATSAPP, 'chat-b@g.us');
+			const a = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			const b = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-b@g.us');
 			expect(a.id).not.toBe(b.id);
 		});
 
 		it('rejeita chatIdExterno vazio', async () => {
-			await expect(conversaService.getOrCreate(WHATSAPP, '   ')).rejects.toMatchObject({
+			await expect(conversaService.getOrCreate(USER_A, WHATSAPP, '   ')).rejects.toMatchObject({
 				statusCode: 400,
 			});
 		});
@@ -57,20 +60,20 @@ describe('ConversationService', () => {
 
 	describe('get', () => {
 		it('recupera conversa existente por id', async () => {
-			const criada = await conversaService.getOrCreate(WHATSAPP, 'chat-x@g.us');
-			const recuperada = await conversaService.get(criada.id);
+			const criada = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-x@g.us');
+			const recuperada = await conversaService.get(USER_A, criada.id);
 			expect(recuperada.id).toBe(criada.id);
 		});
 
 		it('retorna 404 para id inexistente', async () => {
-			await expect(conversaService.get('0'.repeat(24))).rejects.toBeInstanceOf(AppError);
+			await expect(conversaService.get(USER_A, '0'.repeat(24))).rejects.toBeInstanceOf(AppError);
 		});
 	});
 
 	describe('appendMessage / getRecentMessages', () => {
 		it('anexa mensagem de usuário', async () => {
 			const id = await criarConversaDeTeste();
-			const msg = await conversaService.appendMessage(id, {
+			const msg = await conversaService.appendMessage(USER_A, id, {
 				papel: 'usuario',
 				conteudo: 'Olá, tudo bem?',
 			});
@@ -82,7 +85,7 @@ describe('ConversationService', () => {
 
 		it('anexa mensagem do Axis', async () => {
 			const id = await criarConversaDeTeste();
-			const msg = await conversaService.appendMessage(id, {
+			const msg = await conversaService.appendMessage(USER_A, id, {
 				papel: 'axis',
 				conteudo: 'Como posso ajudar?',
 			});
@@ -92,23 +95,23 @@ describe('ConversationService', () => {
 		it('rejeita conteúdo vazio', async () => {
 			const id = await criarConversaDeTeste();
 			await expect(
-				conversaService.appendMessage(id, { papel: 'usuario', conteudo: '   ' }),
+				conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: '   ' }),
 			).rejects.toMatchObject({ statusCode: 400 });
 		});
 
 		it('retorna 404 ao anexar em conversa inexistente', async () => {
 			await expect(
-				conversaService.appendMessage('0'.repeat(24), { papel: 'usuario', conteudo: 'oi' }),
+				conversaService.appendMessage(USER_A, '0'.repeat(24), { papel: 'usuario', conteudo: 'oi' }),
 			).rejects.toMatchObject({ statusCode: 404 });
 		});
 
 		it('retorna histórico em ordem cronológica', async () => {
 			const id = await criarConversaDeTeste();
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: '1' });
-			await conversaService.appendMessage(id, { papel: 'axis', conteudo: '2' });
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: '3' });
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: '1' });
+			await conversaService.appendMessage(USER_A, id, { papel: 'axis', conteudo: '2' });
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: '3' });
 
-			const msgs = await conversaService.getRecentMessages(id, 10);
+			const msgs = await conversaService.getRecentMessages(USER_A, id, 10);
 			expect(msgs.map((m) => m.conteudo)).toEqual(['1', '2', '3']);
 			for (let i = 1; i < msgs.length; i++) {
 				expect(msgs[i].criadoEm.getTime()).toBeGreaterThanOrEqual(msgs[i - 1].criadoEm.getTime());
@@ -118,46 +121,46 @@ describe('ConversationService', () => {
 		it('limita às N mensagens mais recentes mantendo ordem', async () => {
 			const id = await criarConversaDeTeste();
 			for (const texto of ['1', '2', '3', '4', '5']) {
-				await conversaService.appendMessage(id, { papel: 'usuario', conteudo: texto });
+				await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: texto });
 			}
-			const msgs = await conversaService.getRecentMessages(id, 3);
+			const msgs = await conversaService.getRecentMessages(USER_A, id, 3);
 			expect(msgs.map((m) => m.conteudo)).toEqual(['3', '4', '5']);
 		});
 
 		it('aplica limites mínimo e máximo no limit', async () => {
 			const id = await criarConversaDeTeste();
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'única' });
-			expect((await conversaService.getRecentMessages(id, 0)).length).toBe(1);
-			expect((await conversaService.getRecentMessages(id, 10000)).length).toBe(1);
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: 'única' });
+			expect((await conversaService.getRecentMessages(USER_A, id, 0)).length).toBe(1);
+			expect((await conversaService.getRecentMessages(USER_A, id, 10000)).length).toBe(1);
 		});
 	});
 
 	describe('associateLead', () => {
 		it('associa um lead existente à conversa', async () => {
 			const id = await criarConversaDeTeste();
-			const lead = await leadService.create({
+			const lead = await leadService.create(USER_A, {
 				nome: 'Maria',
 				telefone: '11987654321',
 				contatoOrigem: 'indicacao',
 			});
-			const conversa = await conversaService.associateLead(id, lead.id);
+			const conversa = await conversaService.associateLead(USER_A, id, lead.id);
 			expect(conversa.leadId).toBe(lead.id);
 		});
 
 		it('retorna 404 se o lead não existe', async () => {
 			const id = await criarConversaDeTeste();
-			await expect(conversaService.associateLead(id, '0'.repeat(24))).rejects.toMatchObject({
+			await expect(conversaService.associateLead(USER_A, id, '0'.repeat(24))).rejects.toMatchObject({
 				statusCode: 404,
 			});
 		});
 
 		it('retorna 404 se a conversa não existe', async () => {
-			const lead = await leadService.create({
+			const lead = await leadService.create(USER_A, {
 				nome: 'João',
 				telefone: '11987654322',
 				contatoOrigem: 'instagram',
 			});
-			await expect(conversaService.associateLead('0'.repeat(24), lead.id)).rejects.toMatchObject({
+			await expect(conversaService.associateLead(USER_A, '0'.repeat(24), lead.id)).rejects.toMatchObject({
 				statusCode: 404,
 			});
 		});
@@ -166,9 +169,9 @@ describe('ConversationService', () => {
 	describe('getConversationContext', () => {
 		it('retorna summary undefined e mensagens para conversa sem summary', async () => {
 			const id = await criarConversaDeTeste();
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'Olá' });
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: 'Olá' });
 
-			const context = await conversaService.getConversationContext(id);
+			const context = await conversaService.getConversationContext(USER_A, id);
 			expect(context.summary).toBeUndefined();
 			expect(context.recentMessages).toHaveLength(1);
 			expect(context.recentMessages[0].conteudo).toBe('Olá');
@@ -176,10 +179,10 @@ describe('ConversationService', () => {
 
 		it('retorna summary existente junto com mensagens recentes', async () => {
 			const id = await criarConversaDeTeste();
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'Olá' });
-			await conversaService.updateSummary(id, 'Resumo da conversa.', 1);
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: 'Olá' });
+			await conversaService.updateSummary(USER_A, id, 'Resumo da conversa.', 1);
 
-			const context = await conversaService.getConversationContext(id);
+			const context = await conversaService.getConversationContext(USER_A, id);
 			expect(context.summary).toBe('Resumo da conversa.');
 			expect(context.recentMessages).toHaveLength(1);
 		});
@@ -187,10 +190,10 @@ describe('ConversationService', () => {
 		it('limita mensagens recentes a 10', async () => {
 			const id = await criarConversaDeTeste();
 			for (let i = 0; i < 15; i++) {
-				await conversaService.appendMessage(id, { papel: 'usuario', conteudo: `msg-${i}` });
+				await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: `msg-${i}` });
 			}
 
-			const context = await conversaService.getConversationContext(id);
+			const context = await conversaService.getConversationContext(USER_A, id);
 			expect(context.recentMessages).toHaveLength(10);
 			expect(context.recentMessages[0].conteudo).toBe('msg-5');
 			expect(context.recentMessages[9].conteudo).toBe('msg-14');
@@ -236,7 +239,7 @@ describe('ConversationService', () => {
 	describe('updateSummary', () => {
 		it('persiste summary na conversa', async () => {
 			const id = await criarConversaDeTeste();
-			const conversa = await conversaService.updateSummary(id, 'Resumo teste.', 10);
+			const conversa = await conversaService.updateSummary(USER_A, id, 'Resumo teste.', 10);
 
 			expect(conversa.summary).toBe('Resumo teste.');
 			expect(conversa.summaryMessageCount).toBe(10);
@@ -245,20 +248,69 @@ describe('ConversationService', () => {
 
 		it('retorna 404 para conversa inexistente', async () => {
 			await expect(
-				conversaService.updateSummary('0'.repeat(24), 'Resumo', 10),
+				conversaService.updateSummary(USER_A, '0'.repeat(24), 'Resumo', 10),
 			).rejects.toMatchObject({ statusCode: 404 });
 		});
 
 		it('preserva histórico completo de mensagens', async () => {
 			const id = await criarConversaDeTeste();
-			await conversaService.appendMessage(id, { papel: 'usuario', conteudo: 'msg-1' });
-			await conversaService.appendMessage(id, { papel: 'axis', conteudo: 'msg-2' });
-			await conversaService.updateSummary(id, 'Resumo.', 2);
+			await conversaService.appendMessage(USER_A, id, { papel: 'usuario', conteudo: 'msg-1' });
+			await conversaService.appendMessage(USER_A, id, { papel: 'axis', conteudo: 'msg-2' });
+			await conversaService.updateSummary(USER_A, id, 'Resumo.', 2);
 
-			const context = await conversaService.getConversationContext(id);
+			const context = await conversaService.getConversationContext(USER_A, id);
 			expect(context.recentMessages).toHaveLength(2);
 			expect(context.recentMessages[0].conteudo).toBe('msg-1');
 			expect(context.recentMessages[1].conteudo).toBe('msg-2');
+		});
+	});
+
+	describe('ownership entre tenants', () => {
+		it('mesmo chat externo gera conversas distintas por usuário', async () => {
+			const a = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-compartilhado@g.us');
+			const b = await conversaService.getOrCreate(USER_B, WHATSAPP, 'chat-compartilhado@g.us');
+			expect(a.id).not.toBe(b.id);
+			expect(a.userId).toBe(USER_A);
+			expect(b.userId).toBe(USER_B);
+		});
+
+		it('get de conversa de outro usuário retorna 404', async () => {
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			await expect(conversaService.get(USER_B, conversa.id)).rejects.toMatchObject({ statusCode: 404 });
+		});
+
+		it('append em conversa de outro usuário retorna 404', async () => {
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			await expect(
+				conversaService.appendMessage(USER_B, conversa.id, { papel: 'usuario', conteudo: 'oi' }),
+			).rejects.toMatchObject({ statusCode: 404 });
+		});
+
+		it('associateLead com lead de outro usuário retorna 404', async () => {
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			const leadB = await leadService.create(USER_B, {
+				nome: 'Lead B',
+				telefone: '11999990001',
+				contatoOrigem: 'whatsapp',
+			});
+			await expect(
+				conversaService.associateLead(USER_A, conversa.id, leadB.id),
+			).rejects.toMatchObject({ statusCode: 404 });
+		});
+
+		it('contexto de conversa de outro usuário retorna 404', async () => {
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			await expect(conversaService.getConversationContext(USER_B, conversa.id)).rejects.toMatchObject({
+				statusCode: 404,
+			});
+		});
+
+		it('operações sem identidade falham com 401', async () => {
+			const conversa = await conversaService.getOrCreate(USER_A, WHATSAPP, 'chat-a@g.us');
+			await expect(conversaService.get('', conversa.id)).rejects.toMatchObject({ statusCode: 401 });
+			await expect(conversaService.getOrCreate('', WHATSAPP, 'chat-a@g.us')).rejects.toMatchObject({
+				statusCode: 401,
+			});
 		});
 	});
 });

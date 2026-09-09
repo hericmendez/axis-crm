@@ -58,4 +58,25 @@ describe('resolveUser middleware', () => {
 		expect(UserModel.create).toHaveBeenCalledWith({ name: 'Axis User', apiKey: 'new-api-key' });
 		expect((req as Request & { userId: string }).userId).toBe('new-user-id');
 	});
+
+	it('skips when identity already set by JWT (never overrides, never creates)', async () => {
+		const next = vi.fn();
+		const req = {
+			header: () => 'env-key',
+			userId: 'jwt-user-id',
+			authMethod: 'jwt',
+		} as unknown as Request;
+		await resolveUser(req, createRes(), next);
+		expect(next).toHaveBeenCalledWith();
+		expect(UserModel.findOne).not.toHaveBeenCalled();
+		expect(UserModel.create).not.toHaveBeenCalled();
+		expect((req as Request & { userId: string }).userId).toBe('jwt-user-id');
+	});
+
+	it('marca authMethod api-key ao resolver pela chave', async () => {
+		const next = vi.fn();
+		const req = createReq('valid-api-key');
+		await resolveUser(req, createRes(), next);
+		expect((req as Request & { authMethod?: string }).authMethod).toBe('api-key');
+	});
 });

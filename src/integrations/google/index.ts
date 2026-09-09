@@ -3,6 +3,7 @@ export type { CalendarEvent, CalendarEventResult, CalendarQueryEvent, CalendarQu
 export { GoogleCalendarAdapter } from './calendar/calendar.adapter.js';
 export type { ICalendarQueryAdapter } from './calendar/calendar-query.interface.js';
 export { GoogleCalendarQueryAdapter } from './calendar/calendar-query.adapter.js';
+export { resolveUserCalendarQuery, type CalendarQueryResolution } from './calendar/calendar-query.resolver.js';
 export { calendarProjection, type CalendarProjectionInput } from './calendar/calendar.projection.js';
 
 export type { ISheetsAdapter } from './sheets/sheets.interface.js';

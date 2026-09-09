@@ -1,14 +1,18 @@
 import type { LLMProvider, ChatMessage, StructuredOutput } from '../types/ai.js';
 import { structuredOutputSchema } from '../types/ai.js';
-import type { ConversationContext } from '../types/conversa.js';
+import type { ConversationContext, Conversa } from '../types/conversa.js';
 import { routeIntent, type IntentRouterDeps } from './intent-router.js';
 import type { OrchestratorResult } from './errors.js';
 import { logger } from '../utils/logger.js';
 
 export interface OrchestratorDeps {
 	llmProvider: LLMProvider;
-	getConversationContext: (conversaId: string) => Promise<ConversationContext>;
+	getConversationContext: (userId: string | undefined, conversaId: string) => Promise<ConversationContext>;
 	intentRouterDeps: IntentRouterDeps;
+	conversaService: {
+		get: (userId: string | undefined, id: string) => Promise<Conversa>;
+		associateLead: (userId: string | undefined, conversaId: string, leadId: string) => Promise<Conversa>;
+	};
 }
 
 function toChatMessages(context: ConversationContext, userMessage: string): ChatMessage[] {
@@ -45,7 +49,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 	): Promise<OrchestratorResult> {
 		let context: ConversationContext;
 		try {
-			context = await deps.getConversationContext(conversaId);
+			context = await deps.getConversationContext(userId, conversaId);
 		} catch (err) {
 			logger.error({ err, conversaId }, 'Falha ao buscar contexto da conversa');
 			return {
@@ -80,6 +84,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
 		if (result.type === 'SERVICE_ERROR') {
 			logger.error({ result, conversaId }, 'Erro de serviço ao processar intent');
+		}
+
+		if (result.type === 'SUCCESS' && result.leadId) {
+			try {
+				const conversa = await deps.conversaService.get(userId, conversaId);
+				if (!conversa.leadId) {
+					await deps.conversaService.associateLead(userId, conversaId, result.leadId);
+					logger.info({ conversaId, leadId: result.leadId }, 'Conversa vinculada ao lead');
+				}
+			} catch (err) {
+				logger.error({ err, conversaId, leadId: result.leadId }, 'Falha ao vincular conversa ao lead');
+			}
 		}
 
 		return result;

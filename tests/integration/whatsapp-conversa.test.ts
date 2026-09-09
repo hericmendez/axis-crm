@@ -39,6 +39,7 @@ describe('integração WhatsApp → ConversationService', () => {
 		const conversa = await conversaPorChat('5511999999999@c.us');
 		expect(conversa).not.toBeNull();
 		expect(conversa?.canal).toBe('whatsapp');
+		expect(conversa?.userId).toBe('507f1f77bcf86cd799439011');
 		expect(conversa?.mensagens).toHaveLength(1);
 		expect(conversa?.mensagens[0]).toMatchObject({
 			papel: 'usuario',
@@ -76,6 +77,7 @@ async function conversaPorChat(chatIdExterno: string) {
 	if (!doc) return null;
 	return {
 		canal: doc.canal as string,
+		userId: String(doc.userId ?? ''),
 		mensagens: (doc.mensagens ?? []).map((m) => ({
 			papel: String(m.papel),
 			conteudo: String(m.conteudo),

@@ -1,36 +1,29 @@
-# API inicial
+# API — guia humano
 
-## Health
+O contrato canônico da API é:
 
-`GET /health`
-
-Resposta:
-
-```json
-{
-  "status": "ok"
-}
+```text
+docs/api/openapi.yaml   (OpenAPI 3.1)
 ```
 
-## WhatsApp
+Ele é validado automaticamente em `tests/unit/openapi-contract.test.ts`
+(toda rota Express registrada precisa existir na spec, `$ref`s precisam
+resolver). Se este guia e a spec divergirem, a spec — e acima dela o
+código — prevalece; reporte a divergência em vez de improvisar.
 
-- `GET /api/whatsapp/status`
-- `GET /api/whatsapp/qr`
-- `POST /api/whatsapp/reconnect`
-- `POST /api/whatsapp/logout`
+## Como autenticar
 
-## Leads
+* Painel (humano): `POST /api/auth/login` → `Authorization: Bearer <JWT>`.
+* Integrações (máquina): header `x-api-key`.
+* Qualquer um dos dois estabelece a identidade do tenant server-side
+  (`req.userId`). Nunca envie `userId`: ele é ignorado.
 
-- `GET /api/leads`
-- `GET /api/leads/:id`
-- `POST /api/leads`
-- `PATCH /api/leads/:id`
-- `DELETE /api/leads/:id`
+## Regras que valem para tudo
 
-## Integrações
-
-- `GET /api/integrations`
-- `POST /api/integrations/google`
-- `DELETE /api/integrations/google`
-
-Endpoints são sugestões iniciais; implementar somente quando o domínio estiver pronto.
+* Sem identidade → `401`. Recurso de outro tenant → `404` (nunca 403).
+* Erros têm a forma `{ "error": "<mensagem>" }`.
+* `GET /api/agenda` e `GET /api/whatsapp/status` são legados congelados;
+  use `GET /api/v1/agenda` e `GET /api/v1/whatsapp/*`.
+* Rate limits: 120 req/min por IP no geral; login/refresh têm limite próprio
+  por IP+email (defaults: 20 por 15 min → 429).
+* Fuso das agendas: `America/Sao_Paulo`.

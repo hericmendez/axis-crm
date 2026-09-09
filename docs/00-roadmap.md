@@ -86,14 +86,48 @@ O assistente não consegue:
 - API/painel React
 - Produção/Docker
 
-## Fase 6 — API/painel
+## Fase 6 — API/painel ✅ COMPLETA (veredicto 6.10: 706 backend + 69 frontend + 10 E2E verdes)
 
-- autenticação
-- endpoints de configuração
-- status do WhatsApp
-- QR Code
-- integrações
-- React separado
+### Objetivo
+
+Expor o domínio do Axis (leads, eventos, agenda, conversas, métricas,
+integrações) via HTTP autenticada e operá-lo por um painel React separado,
+com tenancy multi-user e ownership explícito — sem duplicar regras de
+domínio e sem que o painel acesse MongoDB, WhatsApp ou Google diretamente.
+
+### Decisões (ver ADR-004)
+
+- Multi-user com ownership (`resource.userId === req.userId`, mismatch → 404)
+- Painel usa login email+senha com JWT bearer + refresh; API key mantida só p/ integrações
+- React como aplicação separada, somente HTTP, contrato OpenAPI antes das telas
+- CORS por allowlist (`PANEL_ORIGIN`), nunca `*`
+- Agenda: congela `GET /api/agenda` (legado, deprecated), nova `GET /api/v1/agenda` (5.2)
+- WhatsApp MVP: somente status + QR (`GET /api/whatsapp/status`)
+
+### PASSOs
+
+- **6.1** Especificação + arquitetura ✅ (ADR-004, este documento)
+- **6.2** Auth foundation ✅ — User email+passwordHash, login/refresh rotation/logout, middleware `authenticate` fail-closed, coexistência JWT/API Key, testes
+- **6.3** Tenancy / ownership ✅ — `userId` obrigatório em Lead/Evento/Conversa, backfill idempotente, índices por tenant, scoping em repositories/services/controllers/router/tools, matriz 401/404, testes
+- **6.4** API hardening + CORS ✅ — CORS allowlist (`PANEL_ORIGIN`, sem wildcard), `/api/auth/*` público, rate limit login/refresh, JWT scheme case-insensitive + sub ObjectId, JSON malformado → 400
+- **6.5** Domain/API gap-fill ✅ — `GET /api/v1/agenda` (AgendaView), Conversations API (lista/detalhe bounded), evento GET + `eventoId` explícito (cancel/reagendar reutilizando semântica), filtros de lead, WhatsApp v1 status/QR, flags Google
+- **6.6** API contract ✅ — `docs/api/openapi.yaml` (OpenAPI 3.1, 24 rotas) publicado e testado (`tests/unit/openapi-contract.test.ts`); `docs/07-api.md` reduzido a guia que aponta para a spec
+- **6.7** React foundation ✅ — `web/` (React 18 + Vite 7 + Router 6, pacote `axis-panel`), HTTP client + `ApiError`, tipos espelho OpenAPI, AuthContext, guards, AppShell, decisão de tokens documentada
+- **6.8** Authentication UX ✅ — login real (`/login`), restore via refresh, 401 com refresh single-flight + retry único, logout com revogação best-effort, guards com loading, shell com usuário/sair
+- **6.9** Panel screens ✅ — Dashboard, Leads (CRUD), Agenda (v1 + ações), Conversas, Integrações; shell com sidebar, primitivos UI, testes
+- **6.10** Integration / E2E ✅ — jornada HTTP cross-tenant (auth/tenancy/lifecycle/agenda/conversas), Playwright (10 journeys: painel real + API real + Mongo isolado), contrato OpenAPI coberto
+
+### Fora do escopo (MVP)
+
+- `reconnect`/`logout` do WhatsApp via painel; envio de mensagens pelo painel
+- Roles/permissões além de ownership; novos provedores além de Google
+- Remoção do `/api/agenda` legado (vai para a Fase 7); reconciliação/outbox
+
+### Critérios de aceitação (resumo; checklist completo na especificação)
+
+Login JWT funcionando; ownership enforced (matriz own/other/missing);
+contrato OpenAPI publicado e testado; telas 6.9 operando contra a API;
+CORS allowlist; suíte completa verde; build/lint/diff-check passando.
 
 ## Fase 7 — Produção
 
@@ -145,4 +179,8 @@ PASSO 3.5 — Failure & Retry Strategy           ✅
 PASSO 3.6 — Runtime Validation                 ✅
 PASSO 3.7 — Roadmap/Architecture Audit         ✅
 PASSO 3.8 — Auto-Provisioning                  ✅
+PASSO 5.1 — Calendar Query Adapter             ✅
+PASSO 5.2 — Agenda Avançada                    ✅
+PASSO 5.3 — Vinculação Conversa→Lead           ✅
+PASSO 5.4 — Correção de Eventos                ✅
 ```

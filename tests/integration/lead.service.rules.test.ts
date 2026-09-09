@@ -11,6 +11,8 @@ vi.mock('../../src/repositories/lead.repository.js', async (importOriginal) => {
 	return { ...actual };
 });
 
+const USER_A = '507f1f77bcf86cd799439011';
+
 const baseLead = {
 	nome: 'João',
 	telefone: '11912345678',
@@ -37,25 +39,25 @@ describe('regras de venda no service', () => {
 
 	it('create rejeita dataConversao sem status VENDIDO', async () => {
 		await expect(
-			leadService.create({ ...baseLead, dataConversao: new Date() }),
+			leadService.create(USER_A, { ...baseLead, dataConversao: new Date() }),
 		).rejects.toMatchObject({ statusCode: 422 });
 	});
 
 	it('create com VENDIDO preenche dataConversao automaticamente', async () => {
-		const lead = await leadService.create({ ...baseLead, status: 'VENDIDO' });
+		const lead = await leadService.create(USER_A, { ...baseLead, status: 'VENDIDO' });
 		expect(lead.dataConversao).toBeInstanceOf(Date);
 	});
 
 	it('race condition: E11000 do índice unique vira 409', async () => {
 		vi.spyOn(leadRepository, 'create').mockRejectedValueOnce({ code: 11000 });
-		await expect(leadService.create(baseLead)).rejects.toMatchObject({
+		await expect(leadService.create(USER_A, baseLead)).rejects.toMatchObject({
 			statusCode: 409,
 		});
 	});
 
 	it('outros erros de banco não são mascarados como 409', async () => {
 		vi.spyOn(leadRepository, 'create').mockRejectedValueOnce(new Error('boom'));
-		await expect(leadService.create(baseLead)).rejects.not.toBeInstanceOf(AppError);
+		await expect(leadService.create(USER_A, baseLead)).rejects.not.toBeInstanceOf(AppError);
 	});
 });
 

@@ -9,10 +9,13 @@ export const createEventoSchema = z
 		tipo: z.enum(EVENTO_TIPOS),
 		data: isoDate.optional(),
 		observacoes: z.string().trim().max(2000).optional(),
+		eventoId: objectId.optional(),
 	})
 	.strip();
 
 export const leadIdParamSchema = z.object({ id: objectId }).strip();
+
+export const eventoIdParamSchema = z.object({ id: objectId, eventoId: objectId }).strip();
 
 export const periodoQuerySchema = z
 	.object({
@@ -23,3 +26,19 @@ export const periodoQuerySchema = z
 	.strip();
 
 export const agendaQuerySchema = periodoQuerySchema;
+
+const SETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Range with the same defaults the chat assistant uses (now → +7 days).
+export const agendaRangeQuerySchema = z
+	.object({
+		de: isoDate.optional(),
+		ate: isoDate.optional(),
+	})
+	.strip()
+	.transform((q) => {
+		const ate = q.ate ?? new Date(Date.now() + SETE_DIAS_MS);
+		const de = q.de ?? new Date();
+		return { de, ate };
+	})
+	.refine((p) => p.de < p.ate, { message: "'de' deve ser anterior a 'ate'" });

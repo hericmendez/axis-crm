@@ -7,20 +7,24 @@ import type { CreateLeadInput } from './tools/create-lead.tool.js';
 import type { UpdateLeadInput } from './tools/update-lead.tool.js';
 import type { RegisterEventInput } from './tools/register-event.tool.js';
 import type { ConsultAgendaInput } from './tools/consult-agenda.tool.js';
+import type {
+	EventTargetResolution,
+	ResolveTargetOptions,
+} from '../services/evento.service.js';
 import { parseRelativeDateTime } from './date-parser.js';
 import { validateDateTime } from './date-validator.js';
 import { logger } from '../utils/logger.js';
 
 export interface IntentRouterDeps {
 	leadService: {
-		create: (input: {
+		create: (userId: string | undefined, input: {
 			nome: string;
 			telefone: string;
 			contatoOrigem: string;
 			status?: LeadStatus;
-		}, userId?: string) => Promise<Lead>;
-		update: (id: string, patch: Record<string, unknown>, userId?: string) => Promise<Lead>;
-		getById: (id: string) => Promise<Lead>;
+		}) => Promise<Lead>;
+		update: (userId: string | undefined, id: string, patch: Record<string, unknown>) => Promise<Lead>;
+		getById: (userId: string | undefined, id: string) => Promise<Lead>;
 	};
 	eventoService: {
 		create: (input: {
@@ -28,16 +32,17 @@ export interface IntentRouterDeps {
 			tipo: EventoTipo;
 			data?: Date;
 			observacoes?: string;
-			userId?: string;
+			userId: string;
 		}) => Promise<{ id: string }>;
+		resolveTarget: (userId: string | undefined, leadId: string, opts?: ResolveTargetOptions) => Promise<EventTargetResolution>;
 	};
 	metricasService: {
-		agenda: (de: Date, ate: Date) => Promise<unknown[]>;
+		agenda: (userId: string | undefined, de: Date, ate: Date) => Promise<unknown[]>;
 	};
 	leadRepository: {
-		findById: (id: string) => Promise<Lead | null>;
-		findByTelefone: (telefone: string) => Promise<Lead | null>;
-		findByName: (nome: string) => Promise<Lead[]>;
+		findById: (userId: string | undefined, id: string) => Promise<Lead | null>;
+		findByTelefone: (userId: string | undefined, telefone: string) => Promise<Lead | null>;
+		findByName: (userId: string | undefined, nome: string) => Promise<Lead[]>;
 	};
 	tools: {
 		createLead: InternalTool<CreateLeadInput>;
@@ -49,20 +54,21 @@ export interface IntentRouterDeps {
 
 async function resolveLead(
 	ref: { leadId?: string; telefone?: string; leadRef?: string },
+	userId: string | undefined,
 	deps: IntentRouterDeps,
 ): Promise<{ status: 'FOUND'; lead: Lead } | { status: 'NOT_FOUND' } | { status: 'AMBIGUOUS'; candidates: Lead[] }> {
 	if (ref.leadId) {
-		const lead = await deps.leadRepository.findById(ref.leadId);
+		const lead = await deps.leadRepository.findById(userId, ref.leadId);
 		return lead ? { status: 'FOUND', lead } : { status: 'NOT_FOUND' };
 	}
 
 	if (ref.telefone) {
-		const lead = await deps.leadRepository.findByTelefone(ref.telefone);
+		const lead = await deps.leadRepository.findByTelefone(userId, ref.telefone);
 		return lead ? { status: 'FOUND', lead } : { status: 'NOT_FOUND' };
 	}
 
 	if (ref.leadRef) {
-		const leads = await deps.leadRepository.findByName(ref.leadRef);
+		const leads = await deps.leadRepository.findByName(userId, ref.leadRef);
 		if (leads.length === 0) return { status: 'NOT_FOUND' as const };
 		if (leads.length === 1) {
 			const lead = leads[0];
@@ -86,6 +92,18 @@ const REQUIRED_PARAMS: Record<Intent, string[]> = {
 const ENTITY_REF_INTENTS: Intent[] = ['ATUALIZAR_LEAD', 'REGISTRAR_EVENTO'];
 
 const EVENTOS_COM_DATA_OBRIGATORIA: EventoTipo[] = ['AGENDAMENTO', 'REAGENDAMENTO'];
+
+const TIPOS_COM_ALVO: EventoTipo[] = ['REAGENDAMENTO', 'DESISTENCIA', 'NO_SHOW'];
+
+function formatarCandidato(data: Date): string {
+	return data.toLocaleString('pt-BR', {
+		timeZone: 'America/Sao_Paulo',
+		day: '2-digit',
+		month: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+	});
+}
 
 function validateParams(
 	intent: Intent,
@@ -140,13 +158,17 @@ export async function routeIntent(
 	try {
 		switch (intent) {
 		case 'CRIAR_LEAD': {
-			return await deps.tools.createLead.execute({
+			const result = await deps.tools.createLead.execute({
 				nome: params.nome as string,
 				telefone: params.telefone as string,
 				contatoOrigem: 'whatsapp',
 				...(params.status ? { status: params.status as LeadStatus } : {}),
 				...(userId ? { userId } : {}),
 			});
+			if (result.type === 'SUCCESS' && result.data && typeof result.data === 'object' && 'id' in result.data) {
+				return { ...result, leadId: (result.data as { id: string }).id };
+			}
+			return result;
 		}
 
 			case 'ATUALIZAR_LEAD': {
@@ -156,6 +178,7 @@ export async function routeIntent(
 						telefone: params.telefone as string | undefined,
 						leadRef: params.leadRef as string | undefined,
 					},
+					userId,
 					deps,
 				);
 
@@ -189,7 +212,9 @@ export async function routeIntent(
 					leadId: resolution.lead.id,
 					patch,
 					...(userId ? { userId } : {}),
-				});
+				}).then((result) =>
+					result.type === 'SUCCESS' ? { ...result, leadId: resolution.lead.id } : result,
+				);
 			}
 
 			case 'CONSULTAR_AGENDA': {
@@ -199,7 +224,11 @@ export async function routeIntent(
 					? new Date(params.ate as string)
 					: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-				return await deps.tools.consultAgenda.execute({ de, ate });
+				return await deps.tools.consultAgenda.execute({
+					de,
+					ate,
+					...(userId ? { userId } : {}),
+				});
 			}
 
 		case 'REGISTRAR_EVENTO': {
@@ -211,6 +240,7 @@ export async function routeIntent(
 					telefone: params.telefone as string | undefined,
 					leadRef: params.leadRef as string | undefined,
 				},
+				userId,
 				deps,
 			);
 
@@ -285,6 +315,40 @@ export async function routeIntent(
 		}
 
 				logger.info({ intent, tipo, leadId: resolution.lead.id, hasData: !!eventData, eventData: eventData?.toISOString() }, 'Executing registerEvent tool');
+
+		if (TIPOS_COM_ALVO.includes(tipo)) {
+			const eventoIdParam = typeof params.eventoId === 'string' && params.eventoId ? params.eventoId : undefined;
+			const dataAlvo = (tipo === 'DESISTENCIA' || tipo === 'NO_SHOW') && eventData ? eventData : undefined;
+			const target = await deps.eventoService.resolveTarget(userId, resolution.lead.id, {
+				...(eventoIdParam ? { eventoId: eventoIdParam } : {}),
+				...(dataAlvo ? { dataAlvo } : {}),
+			});
+
+			if (target.status === 'NOT_FOUND') {
+				return {
+					type: 'ENTITY_NOT_FOUND',
+					message: `Não encontrei nenhum agendamento ativo para ${resolution.lead.nome}.`,
+				};
+			}
+			if (target.status === 'ALREADY_RESOLVED') {
+				return {
+					type: 'ENTITY_NOT_FOUND',
+					message: 'Esse compromisso já foi cancelado ou remanejado.',
+				};
+			}
+			if (target.status === 'AMBIGUOUS') {
+				return {
+					type: 'AMBIGUOUS_ENTITY',
+					candidates: target.candidates.map((e) => ({
+						id: e.id,
+						nome: `${resolution.lead.nome} — ${formatarCandidato(e.data)}`,
+						telefone: resolution.lead.telefone,
+					})),
+					message: `Encontrei ${target.candidates.length} agendamentos ativos para ${resolution.lead.nome}. Qual deles você quer alterar?`,
+				};
+			}
+		}
+
 			return await deps.tools.registerEvent.execute({
 					leadId: resolution.lead.id,
 					tipo,
@@ -292,7 +356,9 @@ export async function routeIntent(
 					...(eventData ? { data: eventData } : {}),
 					...(params.observacoes ? { observacoes: params.observacoes as string } : {}),
 					...(userId ? { userId } : {}),
-				});
+				}).then((result) =>
+					result.type === 'SUCCESS' ? { ...result, leadId: resolution.lead.id } : result,
+				);
 			}
 
 			case 'CONVERSAR': {

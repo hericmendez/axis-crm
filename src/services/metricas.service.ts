@@ -3,17 +3,20 @@ import type { AgendaItem } from '../types/agenda.js';
 import type { Lead } from '../types/lead.js';
 import * as leadRepository from '../repositories/lead.repository.js';
 import * as eventoService from './evento.service.js';
+import { requireTenant } from './tenant.js';
 
-export async function leadsPorStatus(): Promise<LeadsPorStatus[]> {
-	return leadRepository.countByStatus();
+export async function leadsPorStatus(userId: string | undefined): Promise<LeadsPorStatus[]> {
+	const tenant = requireTenant(userId);
+	return leadRepository.countByStatus(tenant);
 }
 
-export async function eventosPorTipo(periodo: Periodo): Promise<EventosPorTipo[]> {
-	return eventoService.countByTipoInPeriod(periodo);
+export async function eventosPorTipo(userId: string | undefined, periodo: Periodo): Promise<EventosPorTipo[]> {
+	const tenant = requireTenant(userId);
+	return eventoService.countByTipoInPeriod(tenant, periodo);
 }
 
-export async function taxaConversao(): Promise<TaxaConversao> {
-	const [porStatus] = await Promise.all([leadsPorStatus()]);
+export async function taxaConversao(userId: string | undefined): Promise<TaxaConversao> {
+	const [porStatus] = await Promise.all([leadsPorStatus(userId)]);
 	const totalLeads = porStatus.reduce((acc, s) => acc + s.total, 0);
 	const vendidos = porStatus.find((s) => s.status === 'VENDIDO')?.total ?? 0;
 	return {
@@ -33,7 +36,8 @@ function toAgendaItem(lead: Lead): AgendaItem {
 	};
 }
 
-export async function agenda(de: Date, ate: Date): Promise<AgendaItem[]> {
-	const leads = await leadRepository.findByAgendamentoPeriodo(de, ate);
+export async function agenda(userId: string | undefined, de: Date, ate: Date): Promise<AgendaItem[]> {
+	const tenant = requireTenant(userId);
+	const leads = await leadRepository.findByAgendamentoPeriodo(tenant, de, ate);
 	return leads.map(toAgendaItem);
 }

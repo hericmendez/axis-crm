@@ -9,8 +9,10 @@ import type {
 import { AppError } from '../utils/errors.js';
 import { normalizeTelefone } from '../utils/telefone.js';
 import * as leadRepository from '../repositories/lead.repository.js';
+import type { LeadListFilter } from '../repositories/lead.repository.js';
 import { sheetsProjection } from '../integrations/google/sheets/sheets.projection.js';
 import { logger } from '../utils/logger.js';
+import { requireTenant } from './tenant.js';
 
 const DUPLICATE_KEY_CODE = 11000;
 
@@ -23,7 +25,7 @@ function isDuplicateKeyError(err: unknown): boolean {
 	);
 }
 
-function withNormalizedTelefone(input: CreateLeadInput): CreateLeadInput {
+function withNormalizedTelefone(input: Omit<CreateLeadInput, 'userId'>): Omit<CreateLeadInput, 'userId'> {
 	try {
 		return { ...input, telefone: normalizeTelefone(input.telefone) };
 	} catch {
@@ -37,23 +39,24 @@ function assertConsistentVenda(status: LeadStatus | undefined, dataConversao?: D
 	}
 }
 
-export async function create(rawInput: CreateLeadInput, userId?: string): Promise<Lead> {
+export async function create(userId: string | undefined, rawInput: Omit<CreateLeadInput, 'userId'>): Promise<Lead> {
+	const tenant = requireTenant(userId);
 	const input = withNormalizedTelefone(rawInput);
 	assertConsistentVenda(input.status, input.dataConversao);
 
-	const finalInput: CreateLeadInput =
+	const finalInput: Omit<CreateLeadInput, 'userId'> =
 		input.status === 'VENDIDO' && !input.dataConversao
 			? { ...input, dataConversao: new Date() }
 			: input;
 
-	const existing = await leadRepository.findByTelefone(finalInput.telefone);
+	const existing = await leadRepository.findByTelefone(tenant, finalInput.telefone);
 	if (existing) {
 		throw new AppError(409, 'Já existe um lead com este telefone');
 	}
 
 	let lead: Lead;
 	try {
-		lead = await leadRepository.create(finalInput);
+		lead = await leadRepository.create({ ...finalInput, userId: tenant });
 	} catch (err) {
 		if (isDuplicateKeyError(err)) {
 			throw new AppError(409, 'Já existe um lead com este telefone');
@@ -61,22 +64,21 @@ export async function create(rawInput: CreateLeadInput, userId?: string): Promis
 		throw err;
 	}
 
-	if (userId) {
-		try {
-			await sheetsProjection({ userId, lead });
-		} catch (err) {
-			logger.error(
-				{ err, leadId: lead.id, userId, operation: 'sheetsProjection' },
-				'Sheets projection failed, domain result preserved',
-			);
-		}
+	try {
+		await sheetsProjection({ userId: tenant, lead });
+	} catch (err) {
+		logger.error(
+			{ err, leadId: lead.id, userId: tenant, operation: 'sheetsProjection' },
+			'Sheets projection failed, domain result preserved',
+		);
 	}
 
 	return lead;
 }
 
-export async function getById(id: string): Promise<Lead> {
-	const lead = await leadRepository.findById(id);
+export async function getById(userId: string | undefined, id: string): Promise<Lead> {
+	const tenant = requireTenant(userId);
+	const lead = await leadRepository.findById(tenant, id);
 	if (!lead) {
 		throw new AppError(404, 'Lead não encontrado');
 	}
@@ -84,14 +86,21 @@ export async function getById(id: string): Promise<Lead> {
 }
 
 export async function list(
-	filter: Partial<Pick<Lead, 'status'>>,
+	userId: string | undefined,
+	filter: LeadListFilter,
 	pagination: PaginationParams,
 ): Promise<PaginatedResult<Lead>> {
-	return leadRepository.find(filter, pagination);
+	const tenant = requireTenant(userId);
+	return leadRepository.find(tenant, filter, pagination);
 }
 
-export async function update(id: string, patch: UpdateLeadInput, userId?: string): Promise<Lead> {
-	const existing = await getById(id);
+export async function update(
+	userId: string | undefined,
+	id: string,
+	patch: UpdateLeadInput,
+): Promise<Lead> {
+	const tenant = requireTenant(userId);
+	const existing = await getById(tenant, id);
 	const effectiveStatus = patch.status ?? existing.status;
 
 	if (patch.dataConversao && effectiveStatus !== 'VENDIDO') {
@@ -108,6 +117,7 @@ export async function update(id: string, patch: UpdateLeadInput, userId?: string
 	}
 
 	const updated = await leadRepository.updateById(
+		tenant,
 		id,
 		{ ...finalPatch, ultimaInteracao: new Date() },
 	);
@@ -115,22 +125,21 @@ export async function update(id: string, patch: UpdateLeadInput, userId?: string
 		throw new AppError(404, 'Lead não encontrado');
 	}
 
-	if (userId) {
-		try {
-			await sheetsProjection({ userId, lead: updated });
-		} catch (err) {
-			logger.error(
-				{ err, leadId: updated.id, userId, operation: 'sheetsProjection' },
-				'Sheets projection failed, domain result preserved',
-			);
-		}
+	try {
+		await sheetsProjection({ userId: tenant, lead: updated });
+	} catch (err) {
+		logger.error(
+			{ err, leadId: updated.id, userId: tenant, operation: 'sheetsProjection' },
+			'Sheets projection failed, domain result preserved',
+		);
 	}
 
 	return updated;
 }
 
-export async function remove(id: string): Promise<void> {
-	const deleted = await leadRepository.deleteById(id);
+export async function remove(userId: string | undefined, id: string): Promise<void> {
+	const tenant = requireTenant(userId);
+	const deleted = await leadRepository.deleteById(tenant, id);
 	if (!deleted) {
 		throw new AppError(404, 'Lead não encontrado');
 	}

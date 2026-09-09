@@ -37,6 +37,25 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
 	return {
 		llmProvider: makeLLM({ mode: 'CHAT', confidence: 0.9, response: 'Olá!' }),
 		getConversationContext: vi.fn().mockResolvedValue(makeContext()),
+		conversaService: {
+			get: vi.fn().mockResolvedValue({
+				id: 'conv-1',
+				canal: 'whatsapp',
+				chatIdExterno: 'chat@g.us',
+				mensagens: [],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			}),
+			associateLead: vi.fn().mockImplementation(async (_convId: string, leadId: string) => ({
+				id: 'conv-1',
+				canal: 'whatsapp',
+				chatIdExterno: 'chat@g.us',
+				leadId,
+				mensagens: [],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			})),
+		},
 		intentRouterDeps: {
 			leadService: {
 				create: vi.fn().mockResolvedValue({ id: 'lead-1', nome: 'João', telefone: '16999999999' }),
@@ -45,6 +64,10 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
 			},
 			eventoService: {
 				create: vi.fn().mockResolvedValue({ id: 'evento-1' }),
+				resolveTarget: vi.fn().mockResolvedValue({
+					status: 'FOUND',
+					evento: { id: 'evento-1', leadId: 'lead-1', tipo: 'AGENDAMENTO', data: new Date('2026-09-01T10:00:00-03:00'), createdAt: new Date() },
+				}),
 			},
 			metricasService: {
 				agenda: vi.fn().mockResolvedValue([]),
@@ -202,5 +225,134 @@ describe('orchestrator', () => {
 		expect(chatMessages[1]).toEqual({ role: 'user', content: 'Oi' });
 		expect(chatMessages[2]).toEqual({ role: 'assistant', content: 'Olá' });
 		expect(chatMessages[3]).toEqual({ role: 'user', content: 'Quero criar lead' });
+	});
+
+	it('vincula conversa ao lead quando CRIAR_LEAD retorna leadId', async () => {
+		const deps = makeDeps({
+			llmProvider: makeLLM({
+				mode: 'ACTION',
+				intent: 'CRIAR_LEAD',
+				confidence: 0.95,
+				parameters: { nome: 'João', telefone: '16999999999' },
+			}),
+			intentRouterDeps: {
+				leadService: {
+					create: vi.fn().mockResolvedValue({ id: 'lead-novo', nome: 'João', telefone: '16999999999' }),
+					update: vi.fn().mockResolvedValue({ id: 'lead-novo', nome: 'João', telefone: '16999999999' }),
+					getById: vi.fn().mockResolvedValue(null),
+				},
+				eventoService: { create: vi.fn().mockResolvedValue({ id: 'e1' }), resolveTarget: vi.fn() },
+				metricasService: { agenda: vi.fn().mockResolvedValue([]) },
+				leadRepository: {
+					findById: vi.fn().mockResolvedValue(null),
+					findByTelefone: vi.fn().mockResolvedValue(null),
+					findByName: vi.fn().mockResolvedValue([]),
+				},
+				tools: {
+					createLead: makeTool({ type: 'SUCCESS', message: 'Lead criado.', data: { id: 'lead-novo' }, leadId: 'lead-novo' }),
+					updateLead: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					registerEvent: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					consultAgenda: makeTool({ type: 'SUCCESS', message: 'ok' }),
+				},
+			},
+		});
+		const orchestrator = createOrchestrator(deps);
+		await orchestrator.processMessage('conv-1', 'Cria um lead João');
+
+		expect(deps.conversaService.associateLead).toHaveBeenCalledWith(undefined, 'conv-1', 'lead-novo');
+	});
+
+	it('não sobrescreve leadId já existente na conversa', async () => {
+		const deps = makeDeps({
+			llmProvider: makeLLM({
+				mode: 'ACTION',
+				intent: 'CRIAR_LEAD',
+				confidence: 0.95,
+				parameters: { nome: 'João', telefone: '16999999999' },
+			}),
+			conversaService: {
+				get: vi.fn().mockResolvedValue({
+					id: 'conv-1',
+					canal: 'whatsapp',
+					chatIdExterno: 'chat@g.us',
+					leadId: 'lead-anterior',
+					mensagens: [],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+				associateLead: vi.fn(),
+			},
+			intentRouterDeps: {
+				leadService: {
+					create: vi.fn().mockResolvedValue({ id: 'lead-novo', nome: 'João', telefone: '16999999999' }),
+					update: vi.fn(),
+					getById: vi.fn(),
+				},
+				eventoService: { create: vi.fn(), resolveTarget: vi.fn() },
+				metricasService: { agenda: vi.fn() },
+				leadRepository: {
+					findById: vi.fn(),
+					findByTelefone: vi.fn(),
+					findByName: vi.fn(),
+				},
+				tools: {
+					createLead: makeTool({ type: 'SUCCESS', message: 'ok', data: { id: 'lead-novo' }, leadId: 'lead-novo' }),
+					updateLead: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					registerEvent: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					consultAgenda: makeTool({ type: 'SUCCESS', message: 'ok' }),
+				},
+			},
+		});
+		const orchestrator = createOrchestrator(deps);
+		await orchestrator.processMessage('conv-1', 'Cria um lead João');
+
+		expect(deps.conversaService.associateLead).not.toHaveBeenCalled();
+	});
+
+	it('não falha quando associateLead dá erro (failure isolation)', async () => {
+		const deps = makeDeps({
+			llmProvider: makeLLM({
+				mode: 'ACTION',
+				intent: 'CRIAR_LEAD',
+				confidence: 0.95,
+				parameters: { nome: 'João', telefone: '16999999999' },
+			}),
+			conversaService: {
+				get: vi.fn().mockResolvedValue({
+					id: 'conv-1',
+					canal: 'whatsapp',
+					chatIdExterno: 'chat@g.us',
+					mensagens: [],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				}),
+				associateLead: vi.fn().mockRejectedValue(new Error('MongoDB down')),
+			},
+			intentRouterDeps: {
+				leadService: {
+					create: vi.fn().mockResolvedValue({ id: 'lead-novo', nome: 'João', telefone: '16999999999' }),
+					update: vi.fn(),
+					getById: vi.fn(),
+				},
+				eventoService: { create: vi.fn(), resolveTarget: vi.fn() },
+				metricasService: { agenda: vi.fn() },
+				leadRepository: {
+					findById: vi.fn(),
+					findByTelefone: vi.fn(),
+					findByName: vi.fn(),
+				},
+				tools: {
+					createLead: makeTool({ type: 'SUCCESS', message: 'Lead criado.', data: { id: 'lead-novo' }, leadId: 'lead-novo' }),
+					updateLead: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					registerEvent: makeTool({ type: 'SUCCESS', message: 'ok' }),
+					consultAgenda: makeTool({ type: 'SUCCESS', message: 'ok' }),
+				},
+			},
+		});
+		const orchestrator = createOrchestrator(deps);
+		const result = await orchestrator.processMessage('conv-1', 'Cria um lead João');
+
+		expect(result.type).toBe('SUCCESS');
+		expect(result.message).toContain('Lead criado');
 	});
 });

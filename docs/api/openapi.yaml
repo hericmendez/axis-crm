@@ -1,0 +1,1285 @@
+openapi: 3.1.0
+info:
+  title: Axis CRM API
+  version: 0.1.0
+  description: |-
+    Conversational CRM over WhatsApp. This document is the single authoritative
+    API contract and mirrors the implementation exactly (routes, Zod validation,
+    services, middleware). When in doubt, the code wins; report drift instead of
+    improvising.
+
+    Authentication: human panel users authenticate with JWT bearer tokens
+    (`POST /api/auth/login`); machine integrations keep using the `x-api-key`
+    header. Either mechanism establishes the server-side tenant identity
+    (`req.userId`); clients must never send `userId` — it is ignored/stripped.
+
+    Tenancy: every domain resource belongs to one user. No identity → 401.
+    Resource owned by another tenant → 404 (never 403, no existence oracle).
+    List/aggregate endpoints return only the caller's own records.
+
+    Timezone: agenda and date behavior use America/Sao_Paulo. Date-time fields
+    accept ISO 8601 strings (validated with Zod; coercion follows `new Date()`).
+
+    Rate limits: 120 requests/minute per IP globally (429 `Muitas requisições`);
+    `POST /api/auth/login` and `POST /api/auth/refresh` additionally allow
+    AUTH_LOGIN_MAX attempts per AUTH_LOGIN_WINDOW_MS per IP+email
+    (defaults: 20 per 15 minutes; 429 `Muitas tentativas, tente novamente mais tarde`).
+
+    CORS: cross-origin browser access is governed by an explicit allowlist
+    (`PANEL_ORIGIN`); no wildcard is ever emitted. JWT bearer is used instead
+    of cookies, so no credentials mode is required.
+
+    Errors: all failures use the shape `{ "error": "<message>" }`. Unknown
+    failures return 500 `Internal Server Error` without internals. Malformed
+    JSON bodies return 400 `Corpo da requisição inválido`.
+
+    Legacy surfaces (`GET /api/agenda`, `GET /api/whatsapp/status`) are frozen
+    for compatibility and marked deprecated below; removal is out of scope.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+tags:
+  - name: Auth
+    description: Human login, token rotation and logout.
+  - name: Health
+    description: Liveness probe.
+  - name: Leads
+    description: Lead CRUD, listing and filters.
+  - name: Eventos
+    description: Domain events, including explicit cancel/reschedule targeting.
+  - name: Agenda
+    description: Legacy Mongo-only agenda and the merged v1 agenda view.
+  - name: Conversations
+    description: Read-only WhatsApp conversation inspection.
+  - name: WhatsApp
+    description: Single-channel connection status and QR payload.
+  - name: Google
+    description: Per-user Google OAuth connection management.
+  - name: Metrics
+    description: Tenant-scoped aggregates.
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Public. No data, no authentication of any kind.
+      security: []
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      description: |-
+        Public by necessity. Issues an access JWT plus a refresh token and
+        establishes no session cookie. Unknown email and wrong password both
+        return 401 with the identical message (no user enumeration); even the
+        request-validation failure uses the same message. Additionally
+        rate-limited per IP+email (429).
+      security: []
+      operationId: authLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated. Contains the access token, the refresh token and the public user profile. Never contains password, hash or API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestCredentials'
+        '401':
+          description: Unknown email or wrong password (identical message, no enumeration).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimitedAuth'
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate a refresh token
+      description: |-
+        Public by necessity. Validates the refresh token, revokes it
+        (single-use rotation) and issues a fresh token pair. Expired, revoked
+        or unknown tokens are rejected identically. Additionally rate-limited (429).
+      security: []
+      operationId: authRefresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New token pair (same shape as login).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Malformed request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Expired, revoked or unknown refresh token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimitedAuth'
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      description: |-
+        Public by necessity and intentionally idempotent: unknown or already
+        revoked tokens still return 200. Not rate-limited (reveals nothing).
+      security: []
+      operationId: authLogout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Always returned, even for unknown tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+  /api/leads:
+    get:
+      tags: [Leads]
+      summary: List leads of the caller tenant
+      operationId: listLeads
+      parameters:
+        - $ref: '#/components/parameters/LeadStatusQuery'
+        - name: telefone
+          in: query
+          description: Exact phone filter; normalized server-side with the same rule as creation. Invalid phone → 400.
+          schema:
+            type: string
+            maxLength: 30
+        - name: nome
+          in: query
+          description: Exact name filter (case-insensitive).
+          schema:
+            type: string
+            maxLength: 200
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Paginated leads of the caller tenant only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Leads]
+      summary: Create a lead
+      description: Phone is normalized server-side; duplicates per tenant return 409.
+      operationId: createLead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadCreate'
+      responses:
+        '201':
+          description: Created lead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: A lead with this phone already exists for the tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: dataConversao is only allowed with status VENDIDO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/leads/{id}:
+    get:
+      tags: [Leads]
+      summary: Get a lead by id
+      description: Malformed ids resolve to 404 (repository returns null), never 400.
+      operationId: getLead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: The lead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Leads]
+      summary: Update a lead
+      description: Phone is immutable (stripped from the patch). At least one field is required.
+      operationId: updateLead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadUpdate'
+      responses:
+        '200':
+          description: Updated lead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: dataConversao is only allowed with status VENDIDO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Leads]
+      summary: Delete a lead (hard delete)
+      operationId: deleteLead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '204':
+          description: Deleted. No body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/leads/{id}/eventos:
+    get:
+      tags: [Eventos]
+      summary: List events of a lead, chronological
+      operationId: listEventos
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: Events ordered by date ascending.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evento'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Eventos]
+      summary: Register an event (create, cancel, reschedule)
+      description: |-
+        Domain events are immutable; correction is a new event linked with
+        `previousEventoId`. Cancel = `tipo: DESISTENCIA`; reschedule =
+        `tipo: REAGENDAMENTO` with `data` = the new date/time.
+        `eventoId` optionally pins the explicit correction target
+        (same tenant + lead, active, not superseded); without it the
+        predecessor auto-resolves to the last active event. `eventoId`
+        with AGENDAMENTO/VENDA is rejected (400). `data` defaults to now
+        when omitted. Lead effects and Google Calendar/Sheets projections
+        run with failure isolation (projection failure never rolls back MongoDB).
+      operationId: createEvento
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoCreate'
+      responses:
+        '201':
+          description: Created event, including `previousEventoId` when it corrects one.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '400':
+          description: |-
+            Validation failure; `eventoId` used with a non-correction type; or no
+            active event exists for a correction type (`Não há agendamento ativo...`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Lead not found, or the explicit `eventoId` target does not exist / is already resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/leads/{id}/eventos/{eventoId}:
+    get:
+      tags: [Eventos]
+      summary: Get a single event of a lead
+      description: The event must belong to the lead and to the caller tenant; otherwise 404.
+      operationId: getEvento
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: The event.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/agenda:
+    get:
+      tags: [Agenda]
+      summary: Legacy agenda (Mongo-only, frozen)
+      description: Deprecated. Frozen for compatibility; new consumers must use `GET /api/v1/agenda`.
+      deprecated: true
+      operationId: legacyAgenda
+      parameters:
+        - $ref: '#/components/parameters/DeQuery'
+        - $ref: '#/components/parameters/AteQuery'
+      responses:
+        '200':
+          description: Agenda items derived from lead `dataAgendamento` only.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgendaItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/agenda:
+    get:
+      tags: [Agenda]
+      summary: Merged agenda view (MongoDB + Google Calendar)
+      description: |-
+        The same merged view the chat assistant uses: domain events (1h default
+        duration) fused with Google Calendar events by `googleEventId`,
+        plus merged occupancy, computed free slots and a `calendarStatus`
+        distinguishing an empty agenda from an unavailable calendar
+        (OK / NO_CONNECTION / NO_CALENDAR / UNAVAILABLE). Dates default to
+        now → +7 days, America/Sao_Paulo semantics.
+      operationId: getAgendaV1
+      parameters:
+        - name: de
+          in: query
+          required: false
+          description: Range start (ISO 8601). Defaults to now.
+          schema:
+            type: string
+            format: date-time
+        - name: ate
+          in: query
+          required: false
+          description: Range end (ISO 8601). Defaults to now + 7 days. Must be after `de`.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: The agenda view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgendaView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/metricas:
+    get:
+      tags: [Metrics]
+      summary: Tenant-scoped aggregates
+      operationId: getMetricas
+      parameters:
+        - $ref: '#/components/parameters/DeQuery'
+        - $ref: '#/components/parameters/AteQuery'
+      responses:
+        '200':
+          description: Status distribution, events by type in range, and conversion rate — caller tenant only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metricas'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations of the caller tenant
+      operationId: listConversations
+      parameters:
+        - name: leadId
+          in: query
+          required: false
+          description: Exact linked-lead filter.
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+        - name: canal
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ConversaCanal'
+        - name: chatIdExterno
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Paginated conversations, most recently updated first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversaList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/conversations/{id}:
+    get:
+      tags: [Conversations]
+      summary: Conversation detail with bounded history
+      description: |-
+        Metadata plus at most `limit` recent messages (default 50, max 200).
+        Full unbounded history is intentionally never returned over HTTP.
+      operationId: getConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+        - name: limit
+          in: query
+          required: false
+          description: Max recent messages returned.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversa'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/whatsapp/status:
+    get:
+      tags: [WhatsApp]
+      summary: Legacy WhatsApp status (frozen)
+      description: |-
+        Frozen for compatibility. Subject to the global `x-api-key` middleware
+        when API_KEY is configured, but performs no per-route identity check.
+        New consumers must use `GET /api/v1/whatsapp/status`.
+      deprecated: true
+      operationId: legacyWhatsappStatus
+      security:
+        - {}
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: Raw status plus QR payload when present (null otherwise).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppLegacyStatus'
+  /api/v1/whatsapp/status:
+    get:
+      tags: [WhatsApp]
+      summary: WhatsApp connection status
+      description: Authenticated read-only view of the single-channel integration. Exposes no session files, tokens or client internals.
+      operationId: whatsappStatus
+      responses:
+        '200':
+          description: Connection state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/whatsapp/qr:
+    get:
+      tags: [WhatsApp]
+      summary: Current WhatsApp QR payload
+      description: Returns the QR representation produced by the integration, only while one is available.
+      operationId: whatsappQr
+      responses:
+        '200':
+          description: The QR payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppQr'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No QR currently available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/integrations/google/connect:
+    get:
+      tags: [Google]
+      summary: Start per-user Google OAuth
+      description: Returns the Google authorization URL for the caller tenant.
+      operationId: googleConnect
+      responses:
+        '200':
+          description: Authorization URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/integrations/google/callback:
+    get:
+      tags: [Google]
+      summary: OAuth callback (public, special)
+      description: |-
+        Intentionally public: Google redirects the browser here without
+        credentials. Authorization comes from the single-use `state`
+        (consumed atomically, expired states rejected). Triggers automatic
+        resource provisioning; provisioning failure does not fail the OAuth grant.
+      security: []
+      operationId: googleCallback
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code from Google.
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          description: Single-use state issued by connect.
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          description: Set to `access_denied` when the user denies the grant.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Connected.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [connected, email]
+                properties:
+                  connected:
+                    type: boolean
+                    example: true
+                  email:
+                    type: string
+                    format: email
+        '400':
+          description: Missing code/state, or invalid/expired state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User denied the grant at Google.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/integrations/google/status:
+    get:
+      tags: [Google]
+      summary: Google connection status of the caller tenant
+      description: Safe metadata only. Never exposes refresh/access tokens, headers or client credentials.
+      operationId: googleStatus
+      responses:
+        '200':
+          description: Connection state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/integrations/google:
+    delete:
+      tags: [Google]
+      summary: Disconnect Google for the caller tenant
+      operationId: googleDisconnect
+      responses:
+        '204':
+          description: Disconnected. No body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Human panel authentication. Short-lived access JWT from POST /api/auth/login, refreshed via POST /api/auth/refresh.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Machine-to-machine authentication using the shared API_KEY. Preserved for integrations and compatibility.
+  parameters:
+    LeadId:
+      name: id
+      in: path
+      required: true
+      description: Lead MongoDB id.
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    EventoId:
+      name: eventoId
+      in: path
+      required: true
+      description: Event MongoDB id.
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    LeadStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/LeadStatus'
+    DeQuery:
+      name: de
+      in: query
+      required: true
+      description: Range start (ISO 8601). Must be before `ate`.
+      schema:
+        type: string
+        format: date-time
+    AteQuery:
+      name: ate
+      in: query
+      required: true
+      description: Range end (ISO 8601, exclusive semantics per Mongo range).
+      schema:
+        type: string
+        format: date-time
+  responses:
+    BadRequest:
+      description: Invalid input (Zod validation messages, joined).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequestCredentials:
+      description: Invalid request shape. Uses the same generic message as authentication failures (no enumeration).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid identity. Cross-tenant invisibility is 404, never 401.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Unknown id, malformed id where the repository resolves to null, or resource owned by another tenant.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimitedAuth:
+      description: Auth rate limit exceeded (AUTH_LOGIN_MAX attempts per AUTH_LOGIN_WINDOW_MS per IP+email; defaults 20 per 15 minutes).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    ObjectId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      example: 507f1f77bcf86cd799439011
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Lead não encontrado
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    LeadStatus:
+      type: string
+      enum: [AGENDADO, VENDIDO, PERDIDO, NO_SHOW, REAGENDADO]
+    Lead:
+      type: object
+      required: [id, userId, nome, telefone, contatoOrigem, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        userId:
+          $ref: '#/components/schemas/ObjectId'
+        nome:
+          type: string
+          maxLength: 200
+        telefone:
+          type: string
+          description: Normalized server-side (digits only).
+        email:
+          type: string
+          format: email
+        contatoOrigem:
+          type: string
+        senioridade:
+          type: string
+        renda:
+          type: number
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/LeadStatus'
+        dataAgendamento:
+          type: string
+          format: date-time
+        dataConversao:
+          type: string
+          format: date-time
+        tipoFechamento:
+          type: string
+        observacoes:
+          type: string
+        ultimaInteracao:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LeadCreate:
+      type: object
+      required: [nome, telefone, contatoOrigem]
+      properties:
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 200
+        telefone:
+          type: string
+          minLength: 1
+          maxLength: 30
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        contatoOrigem:
+          type: string
+          minLength: 1
+          maxLength: 100
+        senioridade:
+          type: string
+          maxLength: 100
+        renda:
+          type: number
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/LeadStatus'
+        dataAgendamento:
+          type: string
+          format: date-time
+        dataConversao:
+          type: string
+          format: date-time
+        tipoFechamento:
+          type: string
+          maxLength: 100
+        observacoes:
+          type: string
+          maxLength: 2000
+    LeadUpdate:
+      type: object
+      minProperties: 1
+      description: Same fields as creation except immutable telefone; at least one field required.
+      properties:
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        contatoOrigem:
+          type: string
+          minLength: 1
+          maxLength: 100
+        senioridade:
+          type: string
+          maxLength: 100
+        renda:
+          type: number
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/LeadStatus'
+        dataAgendamento:
+          type: string
+          format: date-time
+        dataConversao:
+          type: string
+          format: date-time
+        tipoFechamento:
+          type: string
+          maxLength: 100
+        observacoes:
+          type: string
+          maxLength: 2000
+    LeadList:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Lead'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+    EventoTipo:
+      type: string
+      enum: [AGENDAMENTO, VENDA, DESISTENCIA, REAGENDAMENTO, NO_SHOW]
+    Evento:
+      type: object
+      required: [id, userId, leadId, tipo, data, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        userId:
+          $ref: '#/components/schemas/ObjectId'
+        leadId:
+          $ref: '#/components/schemas/ObjectId'
+        tipo:
+          $ref: '#/components/schemas/EventoTipo'
+        data:
+          type: string
+          format: date-time
+        observacoes:
+          type: string
+        previousEventoId:
+          $ref: '#/components/schemas/ObjectId'
+          description: Present when this event corrects a previous one.
+        googleEventId:
+          type: string
+          description: Deterministic Google Calendar id from the projection.
+        createdAt:
+          type: string
+          format: date-time
+    EventoCreate:
+      type: object
+      required: [tipo]
+      properties:
+        tipo:
+          $ref: '#/components/schemas/EventoTipo'
+        data:
+          type: string
+          format: date-time
+          description: Defaults to now when omitted.
+        observacoes:
+          type: string
+          maxLength: 2000
+        eventoId:
+          $ref: '#/components/schemas/ObjectId'
+          description: Explicit correction target (DESISTENCIA/REAGENDAMENTO/NO_SHOW only). Must be same tenant + lead, active and not superseded; rejected with 404 otherwise, and with 400 for other tipos.
+    ConversaCanal:
+      type: string
+      enum: [whatsapp]
+    MensagemPapel:
+      type: string
+      enum: [usuario, axis]
+    MensagemConversa:
+      type: object
+      required: [id, papel, conteudo, criadoEm]
+      properties:
+        id:
+          type: string
+        papel:
+          $ref: '#/components/schemas/MensagemPapel'
+        conteudo:
+          type: string
+        criadoEm:
+          type: string
+          format: date-time
+    Conversa:
+      type: object
+      required: [id, userId, canal, chatIdExterno, mensagens, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        userId:
+          $ref: '#/components/schemas/ObjectId'
+        canal:
+          $ref: '#/components/schemas/ConversaCanal'
+        chatIdExterno:
+          type: string
+        leadId:
+          $ref: '#/components/schemas/ObjectId'
+        mensagens:
+          type: array
+          description: Bounded to the requested limit on detail; never the full unbounded history.
+          items:
+            $ref: '#/components/schemas/MensagemConversa'
+        summary:
+          type: string
+        summaryUpdatedAt:
+          type: string
+          format: date-time
+        summaryMessageCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ConversaList:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversa'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+    AgendaOrigem:
+      type: string
+      enum: [domain, google]
+    AgendaEventoView:
+      type: object
+      required: [id, origem, titulo, inicio, fim, allDay]
+      properties:
+        id:
+          type: string
+          description: Domain ObjectId or Google event id, depending on origem.
+        origem:
+          $ref: '#/components/schemas/AgendaOrigem'
+        titulo:
+          type: string
+        inicio:
+          type: string
+          format: date-time
+        fim:
+          type: string
+          format: date-time
+        allDay:
+          type: boolean
+        tipo:
+          $ref: '#/components/schemas/EventoTipo'
+        leadId:
+          $ref: '#/components/schemas/ObjectId'
+        leadNome:
+          type: string
+        googleEventId:
+          type: string
+    Intervalo:
+      type: object
+      required: [inicio, fim]
+      properties:
+        inicio:
+          type: string
+          format: date-time
+        fim:
+          type: string
+          format: date-time
+    CalendarStatus:
+      type: string
+      enum: [OK, NO_CONNECTION, NO_CALENDAR, UNAVAILABLE]
+      description: Distinguishes an actually empty agenda from an unreadable calendar.
+    AgendaView:
+      type: object
+      required: [de, ate, eventos, ocupacao, disponibilidade, calendarStatus]
+      properties:
+        de:
+          type: string
+          format: date-time
+        ate:
+          type: string
+          format: date-time
+        eventos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgendaEventoView'
+        ocupacao:
+          type: array
+          items:
+            $ref: '#/components/schemas/Intervalo'
+        disponibilidade:
+          type: array
+          items:
+            $ref: '#/components/schemas/Intervalo'
+    AgendaItem:
+      type: object
+      required: [leadId, nome, telefone, dataAgendamento]
+      properties:
+        leadId:
+          $ref: '#/components/schemas/ObjectId'
+        nome:
+          type: string
+        telefone:
+          type: string
+        status:
+          $ref: '#/components/schemas/LeadStatus'
+        dataAgendamento:
+          type: string
+          format: date-time
+    LeadsPorStatus:
+      type: object
+      required: [status, total]
+      properties:
+        status:
+          type: string
+          example: VENDIDO
+        total:
+          type: integer
+    EventosPorTipo:
+      type: object
+      required: [tipo, total]
+      properties:
+        tipo:
+          $ref: '#/components/schemas/EventoTipo'
+        total:
+          type: integer
+    TaxaConversao:
+      type: object
+      required: [totalLeads, vendidos, taxaConversao]
+      properties:
+        totalLeads:
+          type: integer
+        vendidos:
+          type: integer
+        taxaConversao:
+          type: number
+    Metricas:
+      type: object
+      required: [leadsPorStatus, eventosPorTipo, taxaConversao]
+      properties:
+        leadsPorStatus:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeadsPorStatus'
+        eventosPorTipo:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventosPorTipo'
+        taxaConversao:
+          $ref: '#/components/schemas/TaxaConversao'
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+          maxLength: 512
+    AuthUser:
+      type: object
+      required: [id, email, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken:
+          type: string
+          description: Short-lived JWT (default 15 minutes).
+        refreshToken:
+          type: string
+          description: Opaque single-use token (default 30 days); rotated on every refresh.
+        user:
+          $ref: '#/components/schemas/AuthUser'
+    GoogleStatus:
+      description: Safe metadata only; never tokens or client credentials.
+      oneOf:
+        - type: object
+          required: [connected]
+          properties:
+            connected:
+              type: boolean
+              enum: [false]
+        - type: object
+          required: [connected, email, calendarConfigured, spreadsheetConfigured, createdAt]
+          properties:
+            connected:
+              type: boolean
+              enum: [true]
+            email:
+              type: string
+              format: email
+            calendarConfigured:
+              type: boolean
+            spreadsheetConfigured:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+    WhatsAppStatus:
+      type: object
+      required: [status, connected]
+      properties:
+        status:
+          type: string
+          enum: [desconectado, aguardando_qr, conectando, conectado]
+        connected:
+          type: boolean
+    WhatsAppLegacyStatus:
+      type: object
+      required: [status]
+      description: Frozen legacy shape; prefer GET /api/v1/whatsapp/status.
+      properties:
+        status:
+          type: string
+          enum: [desconectado, aguardando_qr, conectando, conectado]
+        qr:
+          type: string
+          nullable: true
+    WhatsAppQr:
+      type: object
+      required: [qr]
+      properties:
+        qr:
+          type: string

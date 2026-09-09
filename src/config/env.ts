@@ -28,6 +28,18 @@ const envSchema = z
 		GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
 		GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
 		GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
+		// Panel authentication (Phase 6.2). Secrets only via environment, never hardcoded.
+		// Optional at schema level so non-auth paths boot without it; auth fails closed at runtime.
+		JWT_ACCESS_SECRET: z.string().min(1).optional(),
+		JWT_ACCESS_EXPIRES_IN: z.string().min(1).default('15m'),
+		JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+		BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
+		// CORS allowlist for the separate panel app (comma-separated origins).
+		// Empty = no cross-origin browser access (same-origin / non-browser only).
+		PANEL_ORIGIN: z.string().optional(),
+		// Brute-force protection for /api/auth/login + /api/auth/refresh.
+		AUTH_LOGIN_WINDOW_MS: z.coerce.number().int().positive().default(900000),
+		AUTH_LOGIN_MAX: z.coerce.number().int().positive().default(20),
 	})
 	.refine(
 		(data) => {

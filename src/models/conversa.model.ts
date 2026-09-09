@@ -16,6 +16,7 @@ const mensagemSchema = new Schema(
 
 const conversaSchema = new Schema(
 	{
+		userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 		canal: { type: String, enum: [...CONVERSA_CANAIS], required: true },
 		chatIdExterno: { type: String, required: true, trim: true },
 		leadId: { type: Schema.Types.ObjectId, ref: 'Lead' },
@@ -27,7 +28,7 @@ const conversaSchema = new Schema(
 	{ timestamps: true },
 );
 
-conversaSchema.index({ canal: 1, chatIdExterno: 1 }, { unique: true });
+conversaSchema.index({ userId: 1, canal: 1, chatIdExterno: 1 }, { unique: true });
 
 function toMensagemDTO(doc: Record<string, unknown>): MensagemConversa {
 	const raw = doc as { _id: unknown; createdAt?: unknown; papel: string; conteudo: string };
@@ -41,11 +42,12 @@ function toMensagemDTO(doc: Record<string, unknown>): MensagemConversa {
 
 export function toConversaDTO(doc: Record<string, unknown>): Conversa {
 	const raw = typeof doc.toObject === 'function' ? (doc.toObject() as Record<string, unknown>) : doc;
-	const { _id, __v: _v, mensagens, leadId, summary, summaryUpdatedAt, summaryMessageCount, ...rest } = raw as {
+	const { _id, __v: _v, mensagens, leadId, userId, summary, summaryUpdatedAt, summaryMessageCount, ...rest } = raw as {
 		_id: unknown;
 		__v?: unknown;
 		mensagens?: Record<string, unknown>[];
 		leadId?: unknown;
+		userId?: unknown;
 		summary?: string;
 		summaryUpdatedAt?: Date;
 		summaryMessageCount?: number;
@@ -53,11 +55,12 @@ export function toConversaDTO(doc: Record<string, unknown>): Conversa {
 	return {
 		id: String(_id),
 		...(leadId ? { leadId: String(leadId) } : {}),
+		userId: userId != null ? String(userId) : '',
 		mensagens: (mensagens ?? []).map(toMensagemDTO),
 		...(summary ? { summary } : {}),
 		...(summaryUpdatedAt ? { summaryUpdatedAt } : {}),
 		...(summaryMessageCount != null ? { summaryMessageCount } : {}),
-		...(rest as Omit<Conversa, 'id' | 'mensagens' | 'leadId' | 'summary' | 'summaryUpdatedAt' | 'summaryMessageCount'>),
+		...(rest as Omit<Conversa, 'id' | 'mensagens' | 'leadId' | 'userId' | 'summary' | 'summaryUpdatedAt' | 'summaryMessageCount'>),
 	};
 }
 

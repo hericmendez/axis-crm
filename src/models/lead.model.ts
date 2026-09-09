@@ -3,8 +3,9 @@ import { LEAD_STATUS, type Lead } from '../types/lead.js';
 
 const leadSchema = new Schema(
 	{
+		userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 		nome: { type: String, required: true, trim: true },
-		telefone: { type: String, required: true, unique: true },
+		telefone: { type: String, required: true },
 		email: { type: String, lowercase: true, trim: true },
 		contatoOrigem: { type: String, required: true, trim: true },
 		senioridade: { type: String, trim: true },
@@ -19,11 +20,15 @@ const leadSchema = new Schema(
 	{ timestamps: true },
 );
 
-export function toLeadDTO(doc: { _id: unknown; __v?: unknown } & object): Lead {
-	const { _id, __v: _v, ...rest } = doc;
+leadSchema.index({ userId: 1, telefone: 1 }, { unique: true });
+leadSchema.index({ userId: 1, status: 1 });
+
+export function toLeadDTO(doc: { _id: unknown; __v?: unknown; userId?: unknown } & object): Lead {
+	const { _id, __v: _v, userId, ...rest } = doc;
 	return {
 		id: String(_id),
-		...(rest as Omit<Lead, 'id'>),
+		userId: userId != null ? String(userId) : '',
+		...(rest as Omit<Lead, 'id' | 'userId'>),
 	};
 }
 

@@ -5,6 +5,8 @@ dist/
 !.env.example
 .wwebjs_auth/
 coverage/
+test-results/
+playwright-report/
 *.log
 .DS_Store
 .wwebjs_cache/

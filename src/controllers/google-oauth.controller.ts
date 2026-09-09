@@ -55,6 +55,8 @@ export async function status(req: Request, res: Response): Promise<void> {
 	res.json({
 		connected: true,
 		email: connection.email,
+		calendarConfigured: Boolean(connection.calendarId),
+		spreadsheetConfigured: Boolean(connection.spreadsheetId),
 		createdAt: connection.createdAt,
 	});
 }

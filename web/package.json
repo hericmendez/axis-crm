@@ -1,0 +1,38 @@
+{
+	"name": "axis-panel",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Axis CRM web panel (separate React application, HTTP only)",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc && vite build",
+		"preview": "vite preview",
+		"lint": "eslint src e2e playwright.config.ts",
+		"test": "vitest run",
+		"e2e": "VITE_API_URL=http://127.0.0.1:3101 vite build && playwright test"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"dependencies": {
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1",
+		"react-router-dom": "^6.30.0"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.63.0",
+		"@testing-library/react": "^16.1.0",
+		"@types/react": "^18.3.12",
+		"@types/react-dom": "^18.3.1",
+		"@vitejs/plugin-react": "^4.3.4",
+		"eslint": "^9.16.0",
+		"eslint-config-prettier": "^10.1.0",
+		"jsdom": "^26.0.0",
+		"tsx": "^4.23.12",
+		"typescript": "^5.8.0",
+		"typescript-eslint": "^8.18.0",
+		"vite": "^7.3.0",
+		"vitest": "^3.2.0"
+	}
+}

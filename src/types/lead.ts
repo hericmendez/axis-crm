@@ -4,6 +4,7 @@ export type LeadStatus = (typeof LEAD_STATUS)[number];
 
 export interface Lead {
 	id: string;
+	userId: string;
 	nome: string;
 	telefone: string;
 	email?: string;

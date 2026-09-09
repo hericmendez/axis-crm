@@ -17,6 +17,10 @@ function makeDeps(overrides: Partial<IntentRouterDeps> = {}): IntentRouterDeps {
 		},
 		eventoService: {
 			create: vi.fn().mockResolvedValue({ id: 'evento-1' }),
+			resolveTarget: vi.fn().mockResolvedValue({
+				status: 'FOUND',
+				evento: { id: 'evento-1', leadId: 'lead-1', tipo: 'AGENDAMENTO', data: new Date('2026-09-01T10:00:00-03:00'), createdAt: new Date() },
+			}),
 		},
 		metricasService: {
 			agenda: vi.fn().mockResolvedValue([]),
