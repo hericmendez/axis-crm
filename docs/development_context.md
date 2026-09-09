@@ -79,10 +79,14 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 - **PASSO 3.6 — Runtime Validation**: 13 testes runtime contra Google APIs reais; OAuth, provisioning, Calendar projection, Sheets projection, idempotência verificadas
 - **PASSO 3.8 — Auto-Provisioning**: `provision()` chamado automaticamente após OAuth callback; provisioning failure isolation (log, não falha OAuth)
 
+**Fase 5 — Assistente de Agenda (PASSOS 5.1):**
+
+- **PASSO 5.1 — Calendar Query Adapter**: `ICalendarQueryAdapter` + `GoogleCalendarQueryAdapter` para leitura de eventos do Google Calendar; `CalendarQueryEvent` normalizado (timed + all-day); userId → GoogleConnection → calendarId resolution; 14 unit tests + 7 runtime tests
+
 ### Não existe ainda
 
 - Fallback Ollama (provider local)
-- Leitura de agenda do Google Calendar (write-only atual)
+- Agenda Avançada (merge Calendar + MongoDB)
 - Vinculação automática Conversa→Lead
 - Correção de eventos via chat (cancelamento/reagendamento)
 - Multi-usuário WhatsApp
@@ -97,11 +101,11 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 | 2 | WhatsApp: adapter, filtro, boundary de saída; autenticação real e fluxo de entrada/saída verificados em ambiente real | ✅ |
 | 3 | IA: adapter Groq ✅; ConversationService ✅ + integração WhatsApp→conversas ✅; AI Orchestrator ✅ + intent router ✅ + internal tools ✅; memória longa (summary) ✅ | ✅ |
 | 4 | Integrações Google: Per-user OAuth ✅; Resource Provisioning ✅; Calendar Projection ✅; Sheets Projection ✅; Failure & Retry ✅; Runtime Validation ✅; Auto-Provisioning ✅ | ✅ |
-| 5 | Assistente de Agenda: Calendar Query ✅ (pendente); Agenda Avançada; Vinculação Conversa→Lead; Correção de Eventos | ⬜ |
+| 5 | Assistente de Agenda: Calendar Query ✅; Agenda Avançada; Vinculação Conversa→Lead; Correção de Eventos | ⬜ |
 | 6 | API/painel: auth, endpoints admin, React separado | ⬜ |
 | 7 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Fase 4 concluída (Integrações Google). Próximo: Fase 5 (Assistente de Agenda).
+**Próximos passos imediatos:** Fase 5 PASSO 5.1 concluído (Calendar Query Adapter). Próximo: PASSO 5.2 (Agenda Avançada).
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 
