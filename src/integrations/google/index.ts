@@ -1,6 +1,8 @@
 export type { ICalendarAdapter } from './calendar/calendar.interface.js';
-export type { CalendarEvent, CalendarEventResult } from './calendar/calendar.types.js';
+export type { CalendarEvent, CalendarEventResult, CalendarQueryEvent, CalendarQueryParams } from './calendar/calendar.types.js';
 export { GoogleCalendarAdapter } from './calendar/calendar.adapter.js';
+export type { ICalendarQueryAdapter } from './calendar/calendar-query.interface.js';
+export { GoogleCalendarQueryAdapter } from './calendar/calendar-query.adapter.js';
 export { calendarProjection, type CalendarProjectionInput } from './calendar/calendar.projection.js';
 
 export type { ISheetsAdapter } from './sheets/sheets.interface.js';

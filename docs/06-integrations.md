@@ -11,9 +11,12 @@ integrations/
 │   ├── oauth-user-auth-provider.ts (OAuth token refresh)
 │   ├── provisioner.ts             (Calendar + Spreadsheet provisioning)
 │   ├── calendar/
-│   │   ├── calendar.adapter.ts
+│   │   ├── calendar.adapter.ts    (write: create, update, delete)
+│   │   ├── calendar.interface.ts  (ICalendarAdapter)
+│   │   ├── calendar.types.ts      (CalendarEvent, CalendarQueryEvent)
 │   │   ├── calendar.projection.ts
-│   │   └── calendar.interface.ts
+│   │   ├── calendar-query.adapter.ts   (read: queryEvents)
+│   │   └── calendar-query.interface.ts (ICalendarQueryAdapter)
 │   └── sheets/
 │       ├── sheets.adapter.ts
 │       ├── sheets.projection.ts
@@ -53,6 +56,32 @@ Cada usuário autentica individualmente via Google OAuth 2.0.
 Após OAuth, Calendar "Axis CRM" e Spreadsheet "Axis CRM" são criados automaticamente.
 
 Provisioning é idempotente — skip se já existe.
+
+### Calendar
+
+Google Calendar suporta duas operações:
+
+```
+Write (Projection)
+Domain Service (MongoDB commit)
+    ↓
+Projection Layer (try/catch)
+    ↓
+Google Calendar
+    ↓
+Failure → log, não propaga
+
+Read (Query)
+Agenda Service
+    ↓
+Calendar Query Adapter
+    ↓
+Google Calendar API (events.list)
+    ↓
+Normalized CalendarQueryEvent[]
+```
+
+A leitura é separada da escrita. O adapter de consulta não modifica eventos.
 
 ### Domain Projection
 
