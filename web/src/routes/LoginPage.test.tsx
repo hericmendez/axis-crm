@@ -45,7 +45,7 @@ describe('LoginPage', () => {
 	it('renders labeled email/password fields and submit', async () => {
 		renderLogin();
 		expect(await screen.findByLabelText(/email/i)).toBeTruthy();
-		expect(screen.getByLabelText(/senha/i)).toBeTruthy();
+		expect(screen.getByLabelText(/^Senha$/i)).toBeTruthy();
 		expect(screen.getByRole('button', { name: /entrar/i })).toBeTruthy();
 	});
 
@@ -55,7 +55,7 @@ describe('LoginPage', () => {
 		renderLogin();
 
 		fireEvent.change(await screen.findByLabelText(/email/i), { target: { value: 'not-an-email' } });
-		fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: 'x' } });
+		fireEvent.change(screen.getByLabelText(/^Senha$/i), { target: { value: 'x' } });
 		fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
 		expect(await screen.findByText(/email válido/i)).toBeTruthy();
@@ -72,7 +72,7 @@ describe('LoginPage', () => {
 		renderLogin();
 
 		fireEvent.change(await screen.findByLabelText(/email/i), { target: { value: 'ops@example.com' } });
-		fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: 's3nha-f0rte' } });
+		fireEvent.change(screen.getByLabelText(/^Senha$/i), { target: { value: 's3nha-f0rte' } });
 		fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
 		expect(await screen.findByText('protected-home')).toBeTruthy();
@@ -84,7 +84,7 @@ describe('LoginPage', () => {
 		renderLogin();
 
 		fireEvent.change(await screen.findByLabelText(/email/i), { target: { value: 'ops@example.com' } });
-		const password = screen.getByLabelText(/senha/i) as HTMLInputElement;
+		const password = screen.getByLabelText(/^Senha$/i) as HTMLInputElement;
 		fireEvent.change(password, { target: { value: 'errada' } });
 		fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
@@ -103,7 +103,7 @@ describe('LoginPage', () => {
 		renderLogin();
 
 		fireEvent.change(await screen.findByLabelText(/email/i), { target: { value: 'ops@example.com' } });
-		fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: 's3nha-f0rte' } });
+		fireEvent.change(screen.getByLabelText(/^Senha$/i), { target: { value: 's3nha-f0rte' } });
 		const button = await screen.findByRole('button', { name: /entrar/i });
 		fireEvent.click(button);
 		fireEvent.click(button);
@@ -119,7 +119,7 @@ describe('LoginPage', () => {
 		renderLogin();
 
 		fireEvent.change(await screen.findByLabelText(/email/i), { target: { value: 'ops@example.com' } });
-		fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: 's3nha-f0rte' } });
+		fireEvent.change(screen.getByLabelText(/^Senha$/i), { target: { value: 's3nha-f0rte' } });
 		fireEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
 		const alert = await screen.findByRole('alert');

@@ -25,7 +25,8 @@ describe('DashboardPage', () => {
 		expect(await screen.findByText('Dashboard')).toBeTruthy();
 		expect(await screen.findByText('4')).toBeTruthy();
 		expect(await screen.findByText('25.0%')).toBeTruthy();
-		expect(await screen.findByText(/AGENDADO: 3/)).toBeTruthy();
+		expect(await screen.findByText('AGENDADO')).toBeTruthy();
+		expect(await screen.findByText('3')).toBeTruthy();
 	});
 
 	it('shows loading then error with retry', async () => {

@@ -11,8 +11,12 @@ Backend workflow is unchanged (`pnpm test/build/lint` at root still target
 `src`/`tests`); frontend commands run via `pnpm --dir web <script>`.
 
 ### Stack: React 18 + Vite 7 + TypeScript strict + React Router 6
-No Next.js/SSR/PWA. Plain CSS for the foundation (no UI library, no visual
-identity work in this phase).
+No Next.js/SSR/PWA. UI via Tailwind CSS v4 + shadcn-style primitives
+(`src/components/ui/`, Radix under the hood) + lucide-react icons. Design
+tokens live in `src/index.css` (`:root` / `.dark`); theme state in
+`src/lib/theme.tsx` (persisted, OS preference default, FOUC guard in
+`index.html`). Shell: collapsible sidebar (persisted), mobile drawer,
+top bar with theme toggle and logout.
 
 ### API client: one shared module (`src/lib/api-client.ts`)
 `apiRequest`/`apiGet` + normalized `ApiError` (status/kind/message/data).

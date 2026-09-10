@@ -17,8 +17,8 @@ test.describe('agenda lifecycle in the panel', () => {
 		await page.getByRole('link', { name: 'Agenda' }).click();
 
 		// Widen the range to the deterministic 2027 fixtures.
-		await page.locator('label', { hasText: /^De / }).locator('input').fill('2027-06-01');
-		await page.locator('label', { hasText: /^Até/ }).locator('input').fill('2027-06-20');
+		await page.getByLabel('De').fill('2027-06-01');
+		await page.getByLabel('Até').fill('2027-06-20');
 		await page.getByRole('button', { name: 'Buscar' }).click();
 
 		// Schedule through the panel (lead search -> select -> date -> submit).
@@ -26,20 +26,22 @@ test.describe('agenda lifecycle in the panel', () => {
 		const booking = page.locator('form').filter({ hasText: 'Buscar lead' });
 		await booking.getByPlaceholder('Nome').fill('Lead Agenda E2E');
 		await booking.getByRole('button', { name: 'Buscar' }).click();
-		await page.getByLabel('Lead', { exact: true }).selectOption(lead.id);
+		await page.getByLabel('Lead', { exact: true }).click();
+		await page.getByRole('option', { name: /Lead Agenda E2E/ }).click();
 		await page.getByLabel('Data e hora').fill(D1);
 		await page.getByRole('button', { name: 'Agendar' }).click();
-		await expect(page.getByText('Lead Agenda E2E')).toBeVisible();
+		await expect(page.getByRole('table').getByText('Lead Agenda E2E')).toBeVisible();
 
 		// Reschedule to a new date.
 		await page.getByRole('button', { name: 'Reagendar' }).click();
 		await page.getByLabel('Nova data e hora').fill(D2);
 		await page.getByRole('button', { name: 'Confirmar' }).click();
-		await expect(page.getByText('Lead Agenda E2E')).toBeVisible();
+		// Both the superseded and the successor rows remain visible (history is kept).
+		await expect(page.getByRole('table').getByText('Lead Agenda E2E')).toHaveCount(2);
 
 		// Cancel with confirmation (the rescheduled, still-active row).
 		await page.locator('tr', { hasText: 'REAGENDAMENTO' }).getByRole('button', { name: 'Cancelar' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancelar compromisso' }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Cancelar compromisso' }).click();
 
 		// The agenda keeps history: verify the cancellation landed in the
 		// domain (DESISTENCIA linked to the rescheduled event) via the API.

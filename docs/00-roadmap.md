@@ -117,6 +117,14 @@ domínio e sem que o painel acesse MongoDB, WhatsApp ou Google diretamente.
 - **6.9** Panel screens ✅ — Dashboard, Leads (CRUD), Agenda (v1 + ações), Conversas, Integrações; shell com sidebar, primitivos UI, testes
 - **6.10** Integration / E2E ✅ — jornada HTTP cross-tenant (auth/tenancy/lifecycle/agenda/conversas), Playwright (10 journeys: painel real + API real + Mongo isolado), contrato OpenAPI coberto
 
+### Pós-6.10 — Redesign UI/UX do painel (sem mudança de comportamento)
+
+- Shell com sidebar fixa colapsável (persistida), drawer mobile e top bar
+- Tema claro/escuro com toggle, persistência e respeito a `prefers-color-scheme`
+- Tailwind CSS v4 + primitivos estilo shadcn/ui (`web/src/components/ui/`) + lucide-react
+- Páginas reestilizadas sem alterar rotas, contratos ou semântica: login, dashboard, leads, agenda, conversas, integrações
+- Responsivo (desktop/tablet/mobile) e acessibilidade base (foco visível, labels, `prefers-reduced-motion`)
+
 ### Fora do escopo (MVP)
 
 - `reconnect`/`logout` do WhatsApp via painel; envio de mensagens pelo painel

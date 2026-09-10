@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { jsonResponse, renderWithRouter } from '../../test-utils.js';
 import { LeadsPage } from './LeadsPage.js';
 
@@ -25,20 +25,20 @@ describe('LeadsPage', () => {
 		vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, PAGE))));
 		renderWithRouter(<LeadsPage />);
 
-		expect(await screen.findByText('João')).toBeTruthy();
-		expect(await screen.findByText(/11999990001/)).toBeTruthy();
+		expect((await screen.findAllByText('João')).length).toBeGreaterThan(0);
+		expect((await screen.findAllByText(/11999990001/)).length).toBeGreaterThan(0);
 	});
 
 	it('applies server-side filters from the form', async () => {
 		const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, PAGE)));
 		vi.stubGlobal('fetch', fetchMock);
 		renderWithRouter(<LeadsPage />);
-		await screen.findByText('João');
+		await within(await screen.findByRole('table')).findByText('João');
 
 		fireEvent.change(screen.getByPlaceholderText('Nome'), { target: { value: 'joão' } });
 		fireEvent.click(screen.getByRole('button', { name: /filtrar/i }));
 
-		await screen.findByText('João');
+		await within(await screen.findByRole('table')).findByText('João');
 		const lastUrl = fetchMock.mock.calls.at(-1)?.[0] as string;
 		expect(lastUrl).toContain('nome=jo%C3%A3o');
 	});

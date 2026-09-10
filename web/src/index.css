@@ -1,403 +1,151 @@
-/* Axis panel design vocabulary: spacing, type, radius, borders, badges,
-   buttons, forms, cards, tables, dialogs. Plain CSS, no framework. */
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens (shadcn-style). Components consume semantic utilities
+   (bg-background, text-foreground, border-border, ...) so light/dark
+   just flips these variables. */
 :root {
-	color-scheme: light;
-	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-	line-height: 1.5;
-	--space-1: 0.25rem;
-	--space-2: 0.5rem;
-	--space-3: 0.75rem;
-	--space-4: 1rem;
-	--space-6: 1.5rem;
-	--radius: 0.5rem;
-	--border: 1px solid #d8dce3;
-	--bg: #f6f7f9;
-	--surface: #ffffff;
-	--text: #1c2333;
-	--muted: #5b6478;
-	--primary: #1f5eff;
-	--primary-contrast: #ffffff;
-	--danger: #b3261e;
-	--ok: #146c2e;
-	--warn: #8a5a00;
-	--shadow: 0 1px 2px rgb(16 24 40 / 0.08);
+	--radius: 0.625rem;
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
+	--card: oklch(1 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover: oklch(1 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	--primary: oklch(0.45 0.18 258);
+	--primary-foreground: oklch(0.985 0 0);
+	--secondary: oklch(0.967 0.001 286.375);
+	--secondary-foreground: oklch(0.21 0.006 285.885);
+	--muted: oklch(0.967 0.001 286.375);
+	--muted-foreground: oklch(0.552 0.016 285.938);
+	--accent: oklch(0.967 0.001 286.375);
+	--accent-foreground: oklch(0.21 0.006 285.885);
+	--destructive: oklch(0.577 0.245 27.325);
+	--destructive-foreground: oklch(0.985 0 0);
+	--success: oklch(0.52 0.15 155);
+	--success-foreground: oklch(0.985 0 0);
+	--warning: oklch(0.6 0.15 75);
+	--warning-foreground: oklch(0.21 0.006 285.885);
+	--border: oklch(0.92 0.004 286.32);
+	--input: oklch(0.92 0.004 286.32);
+	--ring: oklch(0.45 0.18 258);
 }
 
-* {
-	box-sizing: border-box;
+.dark {
+	--background: oklch(0.16 0.005 285);
+	--foreground: oklch(0.96 0 0);
+	--card: oklch(0.20 0.006 285.885);
+	--card-foreground: oklch(0.96 0 0);
+	--popover: oklch(0.20 0.006 285.885);
+	--popover-foreground: oklch(0.96 0 0);
+	--primary: oklch(0.65 0.17 258);
+	--primary-foreground: oklch(0.16 0.005 285);
+	--secondary: oklch(0.26 0.006 286.033);
+	--secondary-foreground: oklch(0.96 0 0);
+	--muted: oklch(0.26 0.006 286.033);
+	--muted-foreground: oklch(0.70 0.015 285.938);
+	--accent: oklch(0.26 0.006 286.033);
+	--accent-foreground: oklch(0.96 0 0);
+	--destructive: oklch(0.65 0.21 27);
+	--destructive-foreground: oklch(0.985 0 0);
+	--success: oklch(0.65 0.15 155);
+	--success-foreground: oklch(0.16 0.005 285);
+	--warning: oklch(0.75 0.15 75);
+	--warning-foreground: oklch(0.16 0.005 285);
+	--border: oklch(1 0 0 / 12%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: oklch(0.65 0.17 258);
 }
 
-body {
-	margin: 0;
-	background: var(--bg);
-	color: var(--text);
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-success: var(--success);
+	--color-success-foreground: var(--success-foreground);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--radius-lg: var(--radius);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-sm: calc(var(--radius) - 4px);
 }
 
-/* ---- shell ---- */
-.axis-shell {
-	display: flex;
-	flex-direction: column;
-	min-height: 100vh;
-}
-
-.axis-topbar {
-	display: flex;
-	align-items: center;
-	gap: var(--space-4);
-	padding: var(--space-3) var(--space-4);
-	background: var(--surface);
-	border-bottom: var(--border);
-}
-
-.axis-brand {
-	font-weight: 700;
-	text-decoration: none;
-	color: var(--text);
-}
-
-.axis-userbox {
-	margin-left: auto;
-	display: flex;
-	align-items: center;
-	gap: var(--space-2);
-	color: var(--muted);
-	font-size: 0.9rem;
-}
-
-.axis-layout {
-	display: flex;
-	flex: 1;
-	min-height: 0;
-}
-
-.axis-nav {
-	display: flex;
-	gap: var(--space-1);
-	padding: var(--space-3) var(--space-4);
-	background: var(--surface);
-	border-bottom: var(--border);
-	flex-wrap: wrap;
-}
-
-.axis-nav a {
-	padding: var(--space-2) var(--space-3);
-	border-radius: var(--radius);
-	text-decoration: none;
-	color: var(--muted);
-}
-
-.axis-nav a.active {
-	background: var(--primary);
-	color: var(--primary-contrast);
-}
-
-.axis-main {
-	padding: var(--space-4);
-	flex: 1;
-	min-width: 0;
-	max-width: 72rem;
-	width: 100%;
-	margin: 0 auto;
-}
-
-/* ---- generic ---- */
-.axis-page-header {
-	display: flex;
-	align-items: baseline;
-	gap: var(--space-3);
-	margin-bottom: var(--space-4);
-	flex-wrap: wrap;
-}
-
-.axis-page-header h1 {
-	margin: 0;
-	font-size: 1.4rem;
-}
-
-.axis-page-header p {
-	margin: 0;
-	color: var(--muted);
-}
-
-.axis-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-	gap: var(--space-3);
-	margin-bottom: var(--space-4);
-}
-
-.axis-card {
-	background: var(--surface);
-	border: var(--border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow);
-	padding: var(--space-4);
-}
-
-.axis-card h2,
-.axis-card h3 {
-	margin: 0 0 var(--space-2);
-	font-size: 1rem;
-}
-
-.axis-card .axis-metric {
-	font-size: 1.6rem;
-	font-weight: 700;
-}
-
-.axis-card .axis-muted {
-	color: var(--muted);
-	font-size: 0.9rem;
-}
-
-.axis-table-wrap {
-	overflow-x: auto;
-	background: var(--surface);
-	border: var(--border);
-	border-radius: var(--radius);
-}
-
-table.axis-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 0.95rem;
-}
-
-.axis-table th,
-.axis-table td {
-	text-align: left;
-	padding: var(--space-2) var(--space-3);
-	border-bottom: var(--border);
-}
-
-.axis-table tr:last-child th,
-.axis-table tr:last-child td {
-	border-bottom: none;
-}
-
-.axis-table a {
-	color: var(--primary);
-}
-
-/* ---- badges ---- */
-.axis-badge {
-	display: inline-block;
-	padding: 0.1rem var(--space-2);
-	border-radius: 999px;
-	font-size: 0.8rem;
-	border: var(--border);
-	background: var(--bg);
-	white-space: nowrap;
-}
-
-.axis-badge.ok {
-	border-color: var(--ok);
-	color: var(--ok);
-}
-
-.axis-badge.warn {
-	border-color: var(--warn);
-	color: var(--warn);
-}
-
-.axis-badge.bad {
-	border-color: var(--danger);
-	color: var(--danger);
-}
-
-.axis-badge.info {
-	border-color: var(--primary);
-	color: var(--primary);
-}
-
-/* ---- forms ---- */
-.axis-form {
-	display: grid;
-	gap: var(--space-3);
-	max-width: 32rem;
-}
-
-.axis-field {
-	display: grid;
-	gap: var(--space-1);
-}
-
-.axis-field label {
-	font-weight: 600;
-	font-size: 0.9rem;
-}
-
-.axis-field input,
-.axis-field select,
-.axis-field textarea {
-	padding: var(--space-2) var(--space-3);
-	border: var(--border);
-	border-radius: var(--radius);
-	font: inherit;
-	background: var(--surface);
-	max-width: 100%;
-}
-
-.axis-field input:disabled,
-.axis-field select:disabled,
-.axis-field textarea:disabled {
-	opacity: 0.6;
-}
-
-.axis-field-error {
-	color: var(--danger);
-	font-size: 0.85rem;
-}
-
-.axis-form-row {
-	display: flex;
-	gap: var(--space-2);
-	flex-wrap: wrap;
-}
-
-button.axis-btn {
-	padding: var(--space-2) var(--space-4);
-	border-radius: var(--radius);
-	border: 1px solid var(--primary);
-	background: var(--primary);
-	color: var(--primary-contrast);
-	font: inherit;
-	cursor: pointer;
-}
-
-button.axis-btn:disabled {
-	opacity: 0.6;
-	cursor: default;
-}
-
-button.axis-btn.secondary {
-	background: var(--surface);
-	color: var(--text);
-	border: var(--border);
-}
-
-button.axis-btn.danger {
-	background: var(--danger);
-	border-color: var(--danger);
-}
-
-a.axis-btn {
-	display: inline-block;
-	padding: var(--space-2) var(--space-4);
-	border-radius: var(--radius);
-	border: 1px solid var(--primary);
-	background: var(--primary);
-	color: var(--primary-contrast);
-	text-decoration: none;
-}
-
-a.axis-btn.secondary {
-	background: var(--surface);
-	color: var(--text);
-	border: var(--border);
-}
-
-/* ---- feedback ---- */
-.axis-error {
-	padding: var(--space-3) var(--space-4);
-	border: 1px solid var(--danger);
-	color: var(--danger);
-	background: var(--surface);
-	border-radius: var(--radius);
-}
-
-.axis-empty {
-	padding: var(--space-6) var(--space-4);
-	text-align: center;
-	color: var(--muted);
-	background: var(--surface);
-	border: var(--border);
-	border-radius: var(--radius);
-}
-
-.axis-success {
-	padding: var(--space-3) var(--space-4);
-	border: 1px solid var(--ok);
-	color: var(--ok);
-	background: var(--surface);
-	border-radius: var(--radius);
-}
-
-/* ---- dialog ---- */
-.axis-dialog-backdrop {
-	position: fixed;
-	inset: 0;
-	background: rgb(16 24 40 / 0.45);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: var(--space-4);
-}
-
-.axis-dialog {
-	background: var(--surface);
-	border-radius: var(--radius);
-	padding: var(--space-4);
-	max-width: 28rem;
-	width: 100%;
-	box-shadow: var(--shadow);
-}
-
-.axis-dialog h2 {
-	margin-top: 0;
-}
-
-/* ---- messages ---- */
-.axis-messages {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2);
-	max-width: 44rem;
-}
-
-.axis-message {
-	padding: var(--space-2) var(--space-3);
-	border-radius: var(--radius);
-	border: var(--border);
-	background: var(--surface);
-}
-
-.axis-message.usuario {
-	align-self: flex-end;
-	background: #e8efff;
-	border-color: #b9ccff;
-	max-width: 85%;
-}
-
-.axis-message.axis {
-	align-self: flex-start;
-	max-width: 85%;
-}
-
-.axis-message-meta {
-	display: block;
-	font-size: 0.75rem;
-	color: var(--muted);
-	margin-top: var(--space-1);
-}
-
-/* ---- responsive ---- */
-@media (max-width: 40rem) {
-	.axis-main {
-		padding: var(--space-3);
+@layer base {
+	* {
+		border-color: var(--border);
 	}
 
-	.axis-userbox span {
-		display: none;
+	body {
+		background-color: var(--background);
+		color: var(--foreground);
+		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+		transition:
+			background-color 0.2s ease,
+			color 0.2s ease;
 	}
 
-	.axis-dialog-backdrop {
-		align-items: flex-end;
-		padding: 0;
+	/* Visible keyboard focus everywhere. */
+	:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+}
+
+@keyframes axis-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes axis-slide-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.axis-animate-fade-in {
+	animation: axis-fade-in 0.15s ease-out;
+}
+
+.axis-animate-slide-in {
+	animation: axis-slide-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
 	}
 
-	.axis-dialog {
-		max-width: none;
-		border-radius: var(--radius) var(--radius) 0 0;
+	body {
+		transition: none;
 	}
 }

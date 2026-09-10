@@ -3,7 +3,19 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../lib/api-client.js';
 import { useApi, useMutation } from '../../lib/use-api.js';
 import { Loading } from '../../components/Loading.js';
-import { ErrorState, Field, PageHeader, SelectInput, SubmitButton, TextArea, TextInput } from '../../components/ui.js';
+import { ErrorState, PageHeader } from '../../components/ui.js';
+import { Button } from '../../components/ui/button.js';
+import { Input } from '../../components/ui/input.js';
+import { Label } from '../../components/ui/label.js';
+import { Alert, AlertDescription } from '../../components/ui/alert.js';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '../../components/ui/select.js';
+import { Card, CardContent } from '../../components/ui/card.js';
 import type { LeadStatus } from '../../types/api.js';
 import { fetchLead, updateLead } from './api.js';
 
@@ -62,71 +74,82 @@ export function LeadEditPage() {
 	return (
 		<>
 			<PageHeader title={`Editar ${lead.nome}`} />
-			<form onSubmit={handleSubmit} noValidate>
-				<div className="axis-form">
-					<Field label="Nome" htmlFor="lead-nome">
-						<TextInput
-							id="lead-nome"
-							value={nomeValue}
-							onChange={(e) => setNome(e.target.value)}
-							required
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Telefone (imutável)" htmlFor="lead-telefone">
-						<TextInput id="lead-telefone" value={lead.telefone} disabled readOnly />
-					</Field>
-					<Field label="Email (opcional)" htmlFor="lead-email">
-						<TextInput
-							id="lead-email"
-							type="email"
-							value={emailValue}
-							onChange={(e) => setEmail(e.target.value)}
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Status" htmlFor="lead-status">
-						<SelectInput
-							id="lead-status"
-							value={statusValue}
-							onChange={(e) => setStatus(e.target.value as '' | LeadStatus)}
-							disabled={mutation.submitting}
-						>
-							{STATUS_OPTIONS.map((option) => (
-								<option key={option} value={option}>
-									{option === '' ? '—' : option}
-								</option>
-							))}
-						</SelectInput>
-					</Field>
-					<Field label="Observações (opcional)" htmlFor="lead-observacoes">
-						<TextArea
-							id="lead-observacoes"
-							value={observacoesValue}
-							onChange={(e) => setObservacoes(e.target.value)}
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					{formError ? (
-						<p className="axis-field-error" role="alert">
-							{formError}
-						</p>
-					) : null}
-					{backendError ? (
-						<p className="axis-field-error" role="alert">
-							{backendError}
-						</p>
-					) : null}
-					<div className="axis-form-row">
-						<SubmitButton disabled={mutation.submitting}>
-							{mutation.submitting ? 'Salvando…' : 'Salvar'}
-						</SubmitButton>
-						<Link className="axis-btn secondary" to={`/leads/${id}`} style={{ textDecoration: 'none' }}>
-							Cancelar
-						</Link>
-					</div>
-				</div>
-			</form>
+			<Card className="max-w-2xl">
+				<CardContent className="pt-6">
+					<form onSubmit={handleSubmit} noValidate className="grid gap-4">
+						<div className="grid gap-1.5">
+							<Label htmlFor="lead-nome">Nome</Label>
+							<Input
+								id="lead-nome"
+								value={nomeValue}
+								onChange={(e) => setNome(e.target.value)}
+								required
+								disabled={mutation.submitting}
+							/>
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="lead-telefone">Telefone (imutável)</Label>
+							<Input id="lead-telefone" value={lead.telefone} disabled readOnly />
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2">
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-email">Email (opcional)</Label>
+								<Input
+									id="lead-email"
+									type="email"
+									value={emailValue}
+									onChange={(e) => setEmail(e.target.value)}
+									disabled={mutation.submitting}
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-status">Status</Label>
+								<Select value={statusValue} onValueChange={(v) => setStatus(v as '' | LeadStatus)}>
+									<SelectTrigger id="lead-status" disabled={mutation.submitting}>
+										<SelectValue placeholder="—" />
+									</SelectTrigger>
+									<SelectContent>
+										{STATUS_OPTIONS.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option === '' ? '—' : option}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="lead-observacoes">Observações (opcional)</Label>
+							<textarea
+								id="lead-observacoes"
+								value={observacoesValue}
+								onChange={(e) => setObservacoes(e.target.value)}
+								disabled={mutation.submitting}
+								rows={3}
+								className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+							/>
+						</div>
+						{formError ? (
+							<Alert variant="destructive">
+								<AlertDescription>{formError}</AlertDescription>
+							</Alert>
+						) : null}
+						{backendError ? (
+							<Alert variant="destructive">
+								<AlertDescription>{backendError}</AlertDescription>
+							</Alert>
+						) : null}
+						<div className="flex flex-wrap gap-2">
+							<Button type="submit" disabled={mutation.submitting}>
+								{mutation.submitting ? 'Salvando…' : 'Salvar'}
+							</Button>
+							<Button type="button" variant="outline" asChild>
+								<Link to={`/leads/${id}`}>Cancelar</Link>
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
 		</>
 	);
 }

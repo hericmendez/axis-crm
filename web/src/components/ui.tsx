@@ -1,29 +1,43 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { ReactNode } from 'react';
 import { ApiError } from '../lib/api-client.js';
+import { Button } from './ui/button.js';
+import { Alert, AlertDescription } from './ui/alert.js';
+import { Skeleton } from './ui/separator.js';
+import { Label } from './ui/label.js';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from './ui/dialog.js';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
 	return (
-		<div className="axis-page-header">
-			<h1>{title}</h1>
-			{subtitle ? <p>{subtitle}</p> : null}
-			{actions ? <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>{actions}</span> : null}
+		<div className="mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+			<h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+			{subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+			{actions ? <div className="ml-auto flex gap-2">{actions}</div> : null}
 		</div>
 	);
 }
 
-export function Card({ title, children }: { title?: string; children: ReactNode }) {
+export function LoadingState({ label, rows = 3 }: { label: string; rows?: number }) {
 	return (
-		<section className="axis-card">
-			{title ? <h2>{title}</h2> : null}
-			{children}
-		</section>
+		<div role="status" aria-live="polite" className="flex flex-col gap-2">
+			<span className="sr-only">{label}</span>
+			{Array.from({ length: rows }, (_, i) => (
+				<Skeleton key={i} className="h-12 w-full" />
+			))}
+		</div>
 	);
 }
 
 export function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
 	return (
-		<div className="axis-empty">
-			<p>{message}</p>
+		<div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
+			<p className="text-sm text-muted-foreground">{message}</p>
 			{action}
 		</div>
 	);
@@ -32,19 +46,17 @@ export function EmptyState({ message, action }: { message: string; action?: Reac
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
 	const message = error instanceof ApiError ? error.message : 'Erro inesperado.';
 	return (
-		<div className="axis-error" role="alert">
-			<p>{message}</p>
+		<Alert variant="destructive">
+			<AlertDescription>{message}</AlertDescription>
 			{onRetry ? (
-				<button type="button" className="axis-btn secondary" onClick={onRetry}>
-					Tentar novamente
-				</button>
+				<div className="mt-3">
+					<Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+						Tentar novamente
+					</Button>
+				</div>
 			) : null}
-		</div>
+		</Alert>
 	);
-}
-
-export function Badge({ tone = 'info', children }: { tone?: 'ok' | 'warn' | 'bad' | 'info'; children: ReactNode }) {
-	return <span className={`axis-badge ${tone}`}>{children}</span>;
 }
 
 export function Field({
@@ -59,32 +71,16 @@ export function Field({
 	children: ReactNode;
 }) {
 	return (
-		<div className="axis-field">
-			<label htmlFor={htmlFor}>{label}</label>
+		<div className="grid gap-1.5">
+			<Label htmlFor={htmlFor}>{label}</Label>
 			{children}
 			{error ? (
-				<span className="axis-field-error" role="alert">
+				<span className="text-sm text-destructive" role="alert">
 					{error}
 				</span>
 			) : null}
 		</div>
 	);
-}
-
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-	return <input {...props} />;
-}
-
-export function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
-	return <select {...props} />;
-}
-
-export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-	return <textarea {...props} rows={props.rows ?? 3} />;
-}
-
-export function SubmitButton(props: ButtonHTMLAttributes<HTMLButtonElement>) {
-	return <button type="submit" className="axis-btn" {...props} />;
 }
 
 export function Pagination({
@@ -100,32 +96,26 @@ export function Pagination({
 }) {
 	const pages = Math.max(1, Math.ceil(total / limit));
 	return (
-		<div className="axis-form-row" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
-			<button
-				type="button"
-				className="axis-btn secondary"
-				disabled={page <= 1}
-				onClick={() => onPage(page - 1)}
-			>
+		<div className="mt-3 flex items-center gap-2">
+			<Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
 				Anterior
-			</button>
-			<span aria-live="polite">
+			</Button>
+			<span aria-live="polite" className="text-sm text-muted-foreground">
 				Página {page} de {pages} ({total})
 			</span>
-			<button
+			<Button
 				type="button"
-				className="axis-btn secondary"
+				variant="outline"
+				size="sm"
 				disabled={page >= pages}
 				onClick={() => onPage(page + 1)}
 			>
 				Próxima
-			</button>
+			</Button>
 		</div>
 	);
 }
 
-// Native <dialog>-free confirmation: explicit buttons, Escape handled by the
-// caller closing it. role=alertdialog for assistive tech.
 export function ConfirmDialog({
 	title,
 	message,
@@ -142,19 +132,21 @@ export function ConfirmDialog({
 	pending?: boolean;
 }) {
 	return (
-		<div className="axis-dialog-backdrop">
-			<div className="axis-dialog" role="alertdialog" aria-modal="true" aria-label={title}>
-				<h2>{title}</h2>
-				<p>{message}</p>
-				<div className="axis-form-row" style={{ justifyContent: 'flex-end' }}>
-					<button type="button" className="axis-btn secondary" onClick={onCancel} disabled={pending}>
+		<Dialog open onOpenChange={(isOpen) => !isOpen && onCancel()}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{title}</DialogTitle>
+					<DialogDescription>{message}</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
 						Cancelar
-					</button>
-					<button type="button" className="axis-btn danger" onClick={onConfirm} disabled={pending}>
+					</Button>
+					<Button type="button" variant="destructive" onClick={onConfirm} disabled={pending}>
 						{pending ? 'Aguarde…' : confirmLabel}
-					</button>
-				</div>
-			</div>
-		</div>
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

@@ -17,17 +17,18 @@ test.describe('lead lifecycle in the panel', () => {
 
 		// Detail shows persisted data.
 		await expect(page.getByRole('heading', { name: 'Lead E2E' })).toBeVisible();
-		await expect(page.getByText(`Telefone: ${PHONE}`)).toBeVisible();
+		await expect(page.getByText(PHONE)).toBeVisible();
 
 		// Edit status.
 		await page.getByRole('link', { name: 'Editar' }).click();
-		await page.getByLabel('Status').selectOption('VENDIDO');
+		await page.getByLabel('Status').click();
+		await page.getByRole('option', { name: 'VENDIDO' }).click();
 		await page.getByRole('button', { name: 'Salvar' }).click();
 		await expect(page.getByText('VENDIDO').first()).toBeVisible();
 
 		// Delete with confirmation.
 		await page.getByRole('button', { name: 'Excluir' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Excluir' }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Excluir' }).click();
 		await expect(page).toHaveURL(/\/leads$/);
 
 		// Gone from the list (server-side filter proves removal).

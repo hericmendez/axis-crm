@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { AuthProvider } from '../../auth/AuthContext.js';
@@ -33,8 +33,8 @@ describe('ConversationsPage', () => {
 		vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, PAGE))));
 		renderWithRouter(<ConversationsPage />);
 
-		expect(await screen.findByText('5511999999999@c.us')).toBeTruthy();
-		expect(await screen.findByText('whatsapp')).toBeTruthy();
+		expect((await screen.findAllByText('5511999999999@c.us')).length).toBeGreaterThan(0);
+		expect((await screen.findAllByText('whatsapp')).length).toBeGreaterThan(0);
 	});
 
 	it('shows empty and error states', async () => {
@@ -55,12 +55,12 @@ describe('ConversationsPage', () => {
 		const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, PAGE)));
 		vi.stubGlobal('fetch', fetchMock);
 		renderWithRouter(<ConversationsPage />);
-		await screen.findByText('5511999999999@c.us');
+		await within(await screen.findByRole('table')).findByText('5511999999999@c.us');
 
 		fireEvent.change(screen.getByPlaceholderText(/5511/i), { target: { value: '5511' } });
 		fireEvent.click(screen.getByRole('button', { name: /filtrar/i }));
 
-		await screen.findByText('5511999999999@c.us');
+		await within(await screen.findByRole('table')).findByText('5511999999999@c.us');
 		const lastUrl = fetchMock.mock.calls.at(-1)?.[0] as string;
 		expect(lastUrl).toContain('chatIdExterno=5511');
 	});

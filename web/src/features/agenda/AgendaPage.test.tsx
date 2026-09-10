@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { jsonResponse, renderWithRouter } from '../../test-utils.js';
 import { AgendaPage } from './AgendaPage.js';
 
@@ -34,10 +34,11 @@ describe('AgendaPage', () => {
 		vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, VIEW))));
 		renderWithRouter(<AgendaPage />);
 
-		expect(await screen.findByText('João')).toBeTruthy();
-		expect(await screen.findByText('Axis')).toBeTruthy();
-		expect(screen.getByRole('button', { name: /reagendar/i })).toBeTruthy();
-		expect(screen.getByRole('button', { name: /^cancelar$/i })).toBeTruthy();
+		expect((await screen.findAllByText('João')).length).toBeGreaterThan(0);
+		expect((await screen.findAllByText('Axis')).length).toBeGreaterThan(0);
+		const table = screen.getByRole('table');
+		expect(within(table).getByRole('button', { name: /reagendar/i })).toBeTruthy();
+		expect(within(table).getByRole('button', { name: /^cancelar$/i })).toBeTruthy();
 	});
 
 	it('shows empty state when there are no events', async () => {
@@ -72,9 +73,9 @@ describe('AgendaPage', () => {
 		});
 		vi.stubGlobal('fetch', fetchMock);
 		renderWithRouter(<AgendaPage />);
-		await screen.findByText('João');
-
-		fireEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+		await within(await screen.findByRole('table')).findByText('João');
+		const table = screen.getByRole('table');
+		fireEvent.click(within(table).getByRole('button', { name: /^cancelar$/i }));
 		expect(await screen.findByText(/cancelar "joão"/i)).toBeTruthy();
 		const confirm = (await screen.findAllByRole('button', { name: /cancelar compromisso/i })).at(-1);
 		if (!confirm) throw new Error('confirm missing');
@@ -104,9 +105,9 @@ describe('AgendaPage', () => {
 		});
 		vi.stubGlobal('fetch', fetchMock);
 		renderWithRouter(<AgendaPage />);
-		await screen.findByText('João');
-
-		fireEvent.click(screen.getByRole('button', { name: /reagendar/i }));
+		await within(await screen.findByRole('table')).findByText('João');
+		const table = screen.getByRole('table');
+		fireEvent.click(within(table).getByRole('button', { name: /reagendar/i }));
 		const input = (await screen.findByLabelText(/nova data/i)) as HTMLInputElement;
 		fireEvent.change(input, { target: { value: '2026-09-12T10:00' } });
 		fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));

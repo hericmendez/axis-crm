@@ -105,7 +105,7 @@ Git: branch `main` com histórico de commits (fases 0–3.5). Ver `git log --one
 | 6 | API/painel ✅ COMPLETA (6.1–6.10): painel React + API multi-tenant + E2E (10 journeys browser + 8 jornadas HTTP); veredicto em docs/00-roadmap.md | ✅ |
 | 7 | Produção: Docker, VPS, backups, observabilidade | ⬜ |
 
-**Próximos passos imediatos:** Phase 6 COMPLETA (6.1–6.10 ✅). Veredicto e próximos candidatos em docs/00-roadmap.md.
+**Próximos passos imediatos:** Phase 6 COMPLETA (6.1–6.10 ✅). Pós-6.10: redesign UI/UX do painel concluído (sidebar colapsável, top bar, tema claro/escuro, Tailwind + shadcn/ui + lucide, páginas reestilizadas sem mudança de comportamento). Veredicto e próximos candidatos em docs/00-roadmap.md.
 
 ## 6. Regras de desenvolvimento (docs/11, 14, 10, 12)
 

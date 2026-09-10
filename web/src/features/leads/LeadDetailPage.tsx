@@ -1,14 +1,52 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Pencil, Trash2 } from 'lucide-react';
 import { ApiError } from '../../lib/api-client.js';
 import { useApi, useMutation } from '../../lib/use-api.js';
 import { Loading } from '../../components/Loading.js';
-import { Badge, Card, ConfirmDialog, EmptyState, ErrorState, PageHeader } from '../../components/ui.js';
+import { PageHeader, EmptyState, ErrorState, ConfirmDialog } from '../../components/ui.js';
+import { Badge } from '../../components/ui/badge.js';
+import { Button } from '../../components/ui/button.js';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.js';
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '../../components/ui/table.js';
+import { Alert, AlertDescription } from '../../components/ui/alert.js';
+import type { LeadStatus } from '../../types/api.js';
 import { deleteLead, fetchLead, fetchLeadEventos } from './api.js';
 
 function formatDate(value?: string): string {
 	if (!value) return '—';
 	return new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function statusVariant(status: LeadStatus): 'success' | 'destructive' | 'warning' | 'secondary' | 'default' {
+	switch (status) {
+		case 'VENDIDO':
+			return 'success';
+		case 'PERDIDO':
+		case 'NO_SHOW':
+			return 'destructive';
+		case 'REAGENDADO':
+		case 'AGENDADO':
+			return 'warning';
+		default:
+			return 'secondary';
+	}
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+	return (
+		<div className="grid grid-cols-[10rem_1fr] gap-2 text-sm">
+			<dt className="text-muted-foreground">{label}</dt>
+			<dd className="m-0 break-words">{children}</dd>
+		</div>
+	);
 }
 
 export function LeadDetailPage() {
@@ -46,62 +84,83 @@ export function LeadDetailPage() {
 		<>
 			<PageHeader
 				title={lead.nome}
+				subtitle={lead.status ? undefined : 'Sem status'}
 				actions={
 					<>
-						<Link className="axis-btn secondary" to={`/leads/${lead.id}/edit`} style={{ textDecoration: 'none' }}>
-							Editar
-						</Link>
-						<button type="button" className="axis-btn danger" onClick={() => setConfirmingDelete(true)}>
-							Excluir
-						</button>
+						<Button variant="outline" asChild>
+							<Link to={`/leads/${lead.id}/edit`}>
+								<Pencil aria-hidden="true" /> Editar
+							</Link>
+						</Button>
+						<Button variant="destructive" onClick={() => setConfirmingDelete(true)}>
+							<Trash2 aria-hidden="true" /> Excluir
+						</Button>
 					</>
 				}
 			/>
-			<div className="axis-cards">
-				<Card title="Dados">
-					<p>Telefone: {lead.telefone}</p>
-					<p>Origem: {lead.contatoOrigem}</p>
-					<p>Status: {lead.status ? <Badge>{lead.status}</Badge> : '—'}</p>
-					{lead.email ? <p>Email: {lead.email}</p> : null}
-					{lead.senioridade ? <p>Senioridade: {lead.senioridade}</p> : null}
-					{typeof lead.renda === 'number' ? <p>Renda: {lead.renda}</p> : null}
-					{lead.tipoFechamento ? <p>Fechamento: {lead.tipoFechamento}</p> : null}
-					{lead.observacoes ? <p>Observações: {lead.observacoes}</p> : null}
-					<p className="axis-muted">Criado em {formatDate(lead.createdAt)}</p>
+			{lead.status ? (
+				<p>
+					<Badge variant={statusVariant(lead.status)}>{lead.status}</Badge>
+				</p>
+			) : null}
+			<div className="mt-4 grid gap-4 lg:grid-cols-2">
+				<Card>
+					<CardHeader>
+						<CardTitle>Dados</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<dl className="grid gap-2">
+							<DetailRow label="Telefone">
+								<span className="tabular-nums">{lead.telefone}</span>
+							</DetailRow>
+							<DetailRow label="Origem">{lead.contatoOrigem}</DetailRow>
+							{lead.email ? <DetailRow label="Email">{lead.email}</DetailRow> : null}
+							{lead.senioridade ? <DetailRow label="Senioridade">{lead.senioridade}</DetailRow> : null}
+							{typeof lead.renda === 'number' ? <DetailRow label="Renda">{lead.renda}</DetailRow> : null}
+							{lead.tipoFechamento ? <DetailRow label="Fechamento">{lead.tipoFechamento}</DetailRow> : null}
+							{lead.observacoes ? <DetailRow label="Observações">{lead.observacoes}</DetailRow> : null}
+							<DetailRow label="Criado em">
+								<span className="text-muted-foreground">{formatDate(lead.createdAt)}</span>
+							</DetailRow>
+						</dl>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardHeader>
+						<CardTitle>Eventos</CardTitle>
+					</CardHeader>
+					<CardContent>
+						{eventosState.status === 'error' ? (
+							<ErrorState error={eventosState.error} onRetry={eventosState.reload} />
+						) : eventosState.status !== 'success' ? (
+							<Loading label="Carregando eventos…" />
+						) : eventosState.data.length === 0 ? (
+							<EmptyState message="Nenhum evento registrado para este lead." />
+						) : (
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead>Tipo</TableHead>
+										<TableHead>Data</TableHead>
+										<TableHead>Observações</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{eventosState.data.map((evento) => (
+										<TableRow key={evento.id}>
+											<TableCell>
+												<Badge variant="secondary">{evento.tipo}</Badge>
+											</TableCell>
+											<TableCell className="tabular-nums">{formatDate(evento.data)}</TableCell>
+											<TableCell>{evento.observacoes ?? '—'}</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+						)}
+					</CardContent>
 				</Card>
 			</div>
-			<Card title="Eventos">
-				{eventosState.status === 'error' ? (
-					<ErrorState error={eventosState.error} onRetry={eventosState.reload} />
-				) : eventosState.status !== 'success' ? (
-					<Loading label="Carregando eventos…" />
-				) : eventosState.data.length === 0 ? (
-					<EmptyState message="Nenhum evento registrado para este lead." />
-				) : (
-					<div className="axis-table-wrap">
-						<table className="axis-table">
-							<thead>
-								<tr>
-									<th>Tipo</th>
-									<th>Data</th>
-									<th>Observações</th>
-								</tr>
-							</thead>
-							<tbody>
-								{eventosState.data.map((evento) => (
-									<tr key={evento.id}>
-										<td>
-											<Badge>{evento.tipo}</Badge>
-										</td>
-										<td>{formatDate(evento.data)}</td>
-										<td>{evento.observacoes ?? '—'}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				)}
-			</Card>
 			{confirmingDelete ? (
 				<ConfirmDialog
 					title="Excluir lead"
@@ -113,9 +172,9 @@ export function LeadDetailPage() {
 				/>
 			) : null}
 			{deletion.error instanceof ApiError ? (
-				<p className="axis-field-error" role="alert">
-					{deletion.error.message}
-				</p>
+				<Alert variant="destructive" className="mt-4">
+					<AlertDescription>{deletion.error.message}</AlertDescription>
+				</Alert>
 			) : null}
 		</>
 	);

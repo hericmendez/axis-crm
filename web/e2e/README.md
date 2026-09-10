@@ -20,6 +20,12 @@ This builds the panel with `VITE_API_URL=http://127.0.0.1:3101`, then runs
 Playwright, which boots both servers automatically (`webServer`) and tears
 them down afterwards.
 
+> Do NOT run bare `playwright test` here: without the rebuild, the served
+> bundle may predate the current sources or lack `VITE_API_URL`, in which
+> case the panel falls back to relative `/api/*` URLs that `vite preview`
+> proxies to the **dev** backend (`localhost:3000`) — producing confusing
+> 401s against developer data instead of the isolated E2E backend.
+
 ## Data strategy
 
 - `scripts/e2e-serve.ts` seeds two deterministic users

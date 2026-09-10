@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert.js';
 
 interface Props {
 	children: ReactNode;
@@ -20,9 +21,10 @@ export class ErrorBoundary extends Component<Props, State> {
 	render() {
 		if (this.state.failed) {
 			return (
-				<div className="axis-error" role="alert">
-				 <p>Ocorreu um erro inesperado ao renderizar esta tela.</p>
-				</div>
+				<Alert variant="destructive" role="alert">
+					<AlertTitle>Ocorreu um erro inesperado</AlertTitle>
+					<AlertDescription>Não foi possível renderizar esta tela. Recarregue a página.</AlertDescription>
+				</Alert>
 			);
 		}
 		return this.props.children;

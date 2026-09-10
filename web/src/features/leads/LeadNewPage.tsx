@@ -2,7 +2,19 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../../lib/api-client.js';
 import { useMutation } from '../../lib/use-api.js';
-import { Field, PageHeader, SelectInput, SubmitButton, TextArea, TextInput } from '../../components/ui.js';
+import { PageHeader } from '../../components/ui.js';
+import { Button } from '../../components/ui/button.js';
+import { Input } from '../../components/ui/input.js';
+import { Label } from '../../components/ui/label.js';
+import { Alert, AlertDescription } from '../../components/ui/alert.js';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '../../components/ui/select.js';
+import { Card, CardContent } from '../../components/ui/card.js';
 import type { LeadStatus } from '../../types/api.js';
 import { createLead } from './api.js';
 
@@ -42,87 +54,102 @@ export function LeadNewPage() {
 
 	return (
 		<>
-			<PageHeader title="Novo lead" />
-			<form onSubmit={handleSubmit} noValidate>
-				<div className="axis-form">
-					<Field label="Nome" htmlFor="lead-nome">
-						<TextInput
-							id="lead-nome"
-							value={nome}
-							onChange={(e) => setNome(e.target.value)}
-							required
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Telefone" htmlFor="lead-telefone">
-						<TextInput
-							id="lead-telefone"
-							value={telefone}
-							onChange={(e) => setTelefone(e.target.value)}
-							required
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Origem do contato" htmlFor="lead-origem">
-						<TextInput
-							id="lead-origem"
-							value={contatoOrigem}
-							onChange={(e) => setContatoOrigem(e.target.value)}
-							required
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Email (opcional)" htmlFor="lead-email">
-						<TextInput
-							id="lead-email"
-							type="email"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					<Field label="Status (opcional)" htmlFor="lead-status">
-						<SelectInput
-							id="lead-status"
-							value={status}
-							onChange={(e) => setStatus(e.target.value as '' | LeadStatus)}
-							disabled={mutation.submitting}
-						>
-							{STATUS_OPTIONS.map((option) => (
-								<option key={option} value={option}>
-									{option === '' ? '—' : option}
-								</option>
-							))}
-						</SelectInput>
-					</Field>
-					<Field label="Observações (opcional)" htmlFor="lead-observacoes">
-						<TextArea
-							id="lead-observacoes"
-							value={observacoes}
-							onChange={(e) => setObservacoes(e.target.value)}
-							disabled={mutation.submitting}
-						/>
-					</Field>
-					{formError ? (
-						<p className="axis-field-error" role="alert">
-							{formError}
-						</p>
-					) : null}
-					{backendError ? (
-						<p className="axis-field-error" role="alert">
-							{backendError}
-						</p>
-					) : null}
-					<div className="axis-form-row">
-						<SubmitButton disabled={mutation.submitting}>
-							{mutation.submitting ? 'Salvando…' : 'Salvar'}
-						</SubmitButton>
-						<Link className="axis-btn secondary" to="/leads" style={{ textDecoration: 'none' }}>
-							Cancelar
-						</Link>
-					</div>
-				</div>
-			</form>
+			<PageHeader title="Novo lead" subtitle="Cadastre um contato comercial" />
+			<Card className="max-w-2xl">
+				<CardContent className="pt-6">
+					<form onSubmit={handleSubmit} noValidate className="grid gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-nome">Nome</Label>
+								<Input
+									id="lead-nome"
+									value={nome}
+									onChange={(e) => setNome(e.target.value)}
+									required
+									disabled={mutation.submitting}
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-telefone">Telefone</Label>
+								<Input
+									id="lead-telefone"
+									inputMode="tel"
+									value={telefone}
+									onChange={(e) => setTelefone(e.target.value)}
+									required
+									disabled={mutation.submitting}
+								/>
+							</div>
+						</div>
+						<div className="grid gap-4 sm:grid-cols-2">
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-origem">Origem do contato</Label>
+								<Input
+									id="lead-origem"
+									value={contatoOrigem}
+									onChange={(e) => setContatoOrigem(e.target.value)}
+									required
+									disabled={mutation.submitting}
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="lead-email">Email (opcional)</Label>
+								<Input
+									id="lead-email"
+									type="email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									disabled={mutation.submitting}
+								/>
+							</div>
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="lead-status">Status (opcional)</Label>
+							<Select value={status} onValueChange={(v) => setStatus(v as '' | LeadStatus)}>
+								<SelectTrigger id="lead-status" disabled={mutation.submitting}>
+									<SelectValue placeholder="—" />
+								</SelectTrigger>
+								<SelectContent>
+									{STATUS_OPTIONS.map((option) => (
+										<SelectItem key={option} value={option}>
+											{option === '' ? '—' : option}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="lead-observacoes">Observações (opcional)</Label>
+							<textarea
+								id="lead-observacoes"
+								value={observacoes}
+								onChange={(e) => setObservacoes(e.target.value)}
+								disabled={mutation.submitting}
+								rows={3}
+								className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+							/>
+						</div>
+						{formError ? (
+							<Alert variant="destructive">
+								<AlertDescription>{formError}</AlertDescription>
+							</Alert>
+						) : null}
+						{backendError ? (
+							<Alert variant="destructive">
+								<AlertDescription>{backendError}</AlertDescription>
+							</Alert>
+						) : null}
+						<div className="flex flex-wrap gap-2">
+							<Button type="submit" disabled={mutation.submitting}>
+								{mutation.submitting ? 'Salvando…' : 'Salvar'}
+							</Button>
+							<Button type="button" variant="outline" asChild>
+								<Link to="/leads">Cancelar</Link>
+							</Button>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
 		</>
 	);
 }

@@ -25,7 +25,7 @@ describe('IntegrationsPage', () => {
 		mockAll({ connected: false }, { status: 'conectado', connected: true }, { qr: 'payload' });
 		renderWithRouter(<IntegrationsPage />);
 
-		expect(await screen.findByText('Não conectado.')).toBeTruthy();
+		expect(await screen.findByText('Não conectado')).toBeTruthy();
 		expect(screen.getByRole('button', { name: /conectar google/i })).toBeTruthy();
 		expect(await screen.findByText('conectado')).toBeTruthy();
 	});
@@ -82,7 +82,7 @@ describe('IntegrationsPage', () => {
 		fireEvent.click(await screen.findByRole('button', { name: /conectar google/i }));
 		// The component then assigns window.location.href (real browser navigation);
 		// assert the contract call that produces the URL instead.
-		await screen.findByText('Não conectado.');
+		await screen.findByText('Não conectado');
 		expect(fetchMock.mock.calls.some(([url]) => (url as string).includes('/google/connect'))).toBe(true);
 	});
 
@@ -90,5 +90,15 @@ describe('IntegrationsPage', () => {
 		vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(500, { error: 'boom' }))));
 		renderWithRouter(<IntegrationsPage />);
 		expect((await screen.findAllByText('boom')).length).toBeGreaterThan(0);
+	});
+
+	it('renders QR payload while waiting and handles QR errors', async () => {
+		mockAll(
+			{ connected: false },
+			{ status: 'aguardando_qr', connected: false },
+			{ qr: 'qr-payload-123' },
+		);
+		renderWithRouter(<IntegrationsPage />);
+		expect(await screen.findByText('qr-payload-123')).toBeTruthy();
 	});
 });

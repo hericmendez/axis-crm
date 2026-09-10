@@ -6,11 +6,11 @@ test.describe('conversations and dashboard in the panel', () => {
 		await loginAs(page, USERS.a.email, USERS.a.password);
 		await page.getByRole('link', { name: 'Conversas' }).click();
 
-	 await expect(page.getByText('5511999999999@c.us')).toBeVisible();
-		await page.getByText('5511999999999@c.us').click();
+	 await expect(page.getByRole('table').getByText('5511999999999@c.us')).toBeVisible();
+		await page.getByRole('table').getByText('5511999999999@c.us').click();
 
 		// Seeded messages render in chronological order.
-		const messages = page.locator('.axis-message');
+		const messages = page.locator('ol li');
 		await expect(messages).toHaveCount(2);
 		expect(await messages.first().innerText()).toContain('Olá, quero agendar');
 		expect(await messages.nth(1).innerText()).toContain('Claro, qual dia?');

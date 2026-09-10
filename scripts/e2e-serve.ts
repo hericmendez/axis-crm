@@ -37,6 +37,7 @@ async function main(): Promise<void> {
 		papel: 'axis',
 		conteudo: 'Claro, qual dia?',
 	});
+	console.log(`E2E-SEED-OK users=2 conversa=${conversa.id}`);
 
 	// The server boots (listen) on import via main().
 	await import('../src/server.js');

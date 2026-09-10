@@ -11,7 +11,7 @@ test.describe('authentication journey', () => {
 	test('invalid credentials show the generic message', async ({ page }) => {
 		await page.goto('/login');
 		await page.getByLabel('Email').fill(USERS.a.email);
-		await page.getByLabel('Senha').fill('senha-errada');
+		await page.getByLabel('Senha', { exact: true }).fill('senha-errada');
 		await page.getByRole('button', { name: 'Entrar' }).click();
 		await expect(page.getByRole('alert')).toContainText('Credenciais inválidas');
 		await expect(page).toHaveURL(/\/login$/);
